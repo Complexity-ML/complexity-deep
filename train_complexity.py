@@ -33,12 +33,16 @@ import os
 import math
 import time
 import argparse
+import warnings
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 import torch
 import torch.nn as nn
+
+# Suppress dtype mismatch warning from PyTorch RMSNorm
+warnings.filterwarnings("ignore", message="Mismatch dtype between input and weight")
 from torch.utils.data import DataLoader, IterableDataset
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
