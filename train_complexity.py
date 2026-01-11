@@ -481,7 +481,7 @@ def train_optimized(
 # MAIN
 # ============================================================================
 
-SIZE_CONFIGS = ["tiny", "20m", "small", "base", "medium", "1b", "large", "3b", "3.8b", "7b"]
+SIZE_CONFIGS = ["tiny", "20m", "small", "150m", "base", "medium", "1b", "large", "3b", "3.8b", "7b"]
 
 
 def main():
