@@ -1,69 +1,78 @@
-# Complexity Model
+# Complexity Deep
 
-A modern transformer architecture with **2024 optimizations** and **Token-Routed MLP** innovation.
+Complexity architecture with **INL Dynamics** for robotics-grade control.
 
-## Innovations
+[![PyPI version](https://badge.fury.io/py/complexity-deep.svg)](https://badge.fury.io/py/complexity-deep)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-### 1. Token-Routed MLP (Original)
-Routes tokens to specialized experts based on token ID:
+## Installation
 
-```
-Token IDs 0-25K     → Expert 0 (frequent tokens)
-Token IDs 25K-50K   → Expert 1
-Token IDs 50K-75K   → Expert 2
-Token IDs 75K-100K  → Expert 3 (rare tokens)
+```bash
+pip install complexity-deep
 ```
 
-### 2. Flash Attention (SDPA)
-Uses PyTorch 2.0+ `scaled_dot_product_attention` for:
-- 2-4x faster attention
-- O(n) memory vs O(n²)
-- Automatic backend selection
+## What's Different from Complexity?
 
-### 3. QK Normalization (2024)
-Normalizes Q and K before attention:
-- Stabilizes training
-- Prevents attention collapse
-- Used in Gemma, Cohere, etc.
+Complexity Deep adds **INL Dynamics** - a robotics-inspired control layer:
 
-### 4. Sliding Window Attention (Optional)
-Mistral-style local attention:
-- Efficient for long sequences
-- Configurable window size
+```
+Input -> [Attention -> MLP -> Dynamics] x N -> Output
+```
 
-## Benefits
-
-| Metric | Standard | Complexity |
-|--------|----------|------------|
-| Attention speed | 1x | 2-4x (Flash) |
-| MLP compute/token | 100% | ~25% (1 expert) |
-| Training stability | baseline | better (QK Norm) |
-| PPL | baseline | better (specialization) |
+The Dynamics layer provides:
+- **Velocity tracking** - smooth trajectories
+- **Learnable equilibrium (mu)** - stable attractors
+- **Adaptive control** - alpha, beta, gate parameters
 
 ## Architecture
 
+Each layer has 3 components:
+
+1. **KQV Attention** (perception) - what tokens to attend to
+2. **Token-Routed MLP** (transformation) - feature processing
+3. **INL Dynamics** (control) - trajectory smoothing
+
+### INL Dynamics Equations
+
+```python
+error = h - mu                      # deviation from equilibrium
+v_next = alpha * v - beta * error   # velocity update (momentum + correction)
+h_next = h + dt * gate * v_next     # position update
 ```
-complexity/
-├── core/
-│   ├── normalization.py    # RMSNorm
-│   ├── rotary.py           # RoPE
-│   ├── attention.py        # GQA + Flash + QK Norm
-│   ├── mlp.py              # Standard SwiGLU
-│   ├── token_routed_mlp.py # Token-Routed MLP
-│   └── layer.py            # Decoder layer
-└── models/
-    ├── config.py           # ComplexityConfig
-    ├── modeling.py         # ComplexityForCausalLM
-    └── utils.py            # create_complexity_model()
-```
+
+Where:
+- `h` = hidden state
+- `v` = velocity (momentum)
+- `mu` = learnable equilibrium point
+- `alpha` = inertia (0.9 default)
+- `beta` = correction strength (0.1 default)
+- `gate` = amplitude control
+- `dt` = integration timestep
 
 ## Usage
 
 ```python
-from complexity import create_complexity_model
+from complexity_deep import DeepConfig, DeepForCausalLM, create_deep_model
 
-# Create model with all innovations (default)
-model = create_complexity_model("base")
+# Create model by size
+model = create_deep_model("base")  # ~125M params
+
+# Or with custom config
+config = DeepConfig(
+    hidden_size=768,
+    num_hidden_layers=12,
+    num_attention_heads=12,
+    num_key_value_heads=4,
+    use_token_routed_mlp=True,
+    num_experts=4,
+    use_qk_norm=True,
+    # INL Dynamics parameters
+    dynamics_alpha=0.9,
+    dynamics_beta=0.1,
+    dynamics_gate=0.5,
+    dynamics_dt=0.1,
+)
+model = DeepForCausalLM(config)
 
 # Forward pass
 outputs = model(input_ids, labels=labels)
@@ -77,31 +86,57 @@ loss = outputs.loss
 | tiny | ~15M | 256 | 6 | 4 |
 | 20m | ~20M | 320 | 8 | 4 |
 | small | ~50M | 512 | 8 | 4 |
+| 150m | ~150M | 768 | 12 | 4 |
 | base | ~125M | 768 | 12 | 4 |
 | medium | ~350M | 1024 | 24 | 4 |
 | large | ~760M | 1536 | 24 | 4 |
 | 1b | ~1B | 2048 | 24 | 4 |
+| 3b | ~3B | 2560 | 32 | 4 |
 
-## Training
+## Why Dynamics?
 
-```bash
-# Train tokenizer first
-python train_tokenizer.py --dataset Pacific-Prime/mixed-inl --vocab-size 100000
+The INL Dynamics layer is inspired by robotics control theory:
 
-# Train model
-python train_complexity.py --size small --dataset Pacific-Prime/mixed-inl
+1. **Smooth Trajectories** - The velocity tracking prevents sudden jumps in hidden states
+2. **Stable Attractors** - The learnable mu provides stable equilibrium points
+3. **Momentum** - Alpha parameter allows the model to maintain momentum
+4. **Error Correction** - Beta parameter provides corrective feedback
+
+This is particularly useful for:
+- Generating coherent long sequences
+- Maintaining consistency in outputs
+- Smooth interpolation in latent space
+
+## CUDA Optimizations
+
+```python
+from complexity_deep.cuda import (
+    HAS_TRITON,
+    get_optimization_info,
+    FusedQKNormAttention,
+    FusedSwiGLUMLP,
+    PersistentTokenRoutedMLP,
+)
+
+# Check available optimizations
+info = get_optimization_info()
+print(info)
+# {
+#   "triton_available": True,
+#   "optimizations": {
+#     "fused_qk_attention": {"speedup": "15-20%"},
+#     "fused_mlp": {"speedup": "20-30%"},
+#     "persistent_cggr": {"speedup": "10-15%"},
+#     "int8_quantization": {"speedup": "40-50%"},
+#   }
+# }
 ```
 
-## Comparison
+## Related Packages
 
-| Component | Llama | INL-LLM v3 | Complexity |
-|-----------|-------|------------|------------|
-| Attention | GQA + RoPE | GQA + RoPE | **GQA + RoPE + Flash + QK Norm** |
-| MLP | SwiGLU | SwiGLU + MoE | **Token-Routed SwiGLU** |
-| Norm | RMSNorm | RMSNorm | RMSNorm |
-| Flash Attention | No | No | **Yes (SDPA)** |
-| QK Norm | No | No | **Yes** |
-| Sliding Window | No | No | **Optional** |
+- **complexity** - Base architecture without Dynamics
+- **complexity-diffusion** - DiT for image generation
+- **pyllm-inference** - Inference server with streaming
 
 ## License
 
