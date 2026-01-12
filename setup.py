@@ -9,7 +9,7 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 setup(
     name="complexity-deep",
-    version="0.5.2",
+    version="0.6.0",
     description="Multicouche robotics architecture with KQV + INL Dynamics + Token-Routed MLP",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -23,6 +23,7 @@ setup(
         "transformers>=4.30.0",
         "datasets>=2.0.0",
         "tokenizers>=0.13.0",
+        "safetensors>=0.3.0",
         "tqdm",
         "tensorboard",
     ],

@@ -223,7 +223,6 @@ class DeepForCausalLM(nn.Module):
         if labels is not None:
             shift_logits = logits[..., :-1, :].contiguous()
             shift_labels = labels[..., 1:].contiguous()
-
             loss = F.cross_entropy(
                 shift_logits.view(-1, self.config.vocab_size),
                 shift_labels.view(-1),
@@ -275,7 +274,10 @@ class DeepForCausalLM(nn.Module):
 
             past_key_values = outputs.past_key_values
             velocity_state = outputs.velocity_state
-            logits = outputs.logits[:, -1, :] / temperature
+
+            # Save raw logits BEFORE any modifications for fallback
+            raw_logits = outputs.logits[:, -1, :].clone()
+            logits = raw_logits / temperature
 
             # Apply top-k
             if top_k > 0:
@@ -297,8 +299,8 @@ class DeepForCausalLM(nn.Module):
                 # Check for invalid logits
                 valid_logits = logits[logits != float('-inf')]
                 if valid_logits.numel() == 0 or torch.isnan(logits).any() or torch.isinf(logits).all():
-                    # Fallback to greedy
-                    next_token = torch.argmax(logits, dim=-1, keepdim=True)
+                    # Fallback to greedy on RAW logits (not filtered)
+                    next_token = torch.argmax(raw_logits, dim=-1, keepdim=True)
                 else:
                     probs = F.softmax(logits, dim=-1)
                     # Clamp to avoid numerical issues
@@ -306,7 +308,7 @@ class DeepForCausalLM(nn.Module):
                     probs = probs / probs.sum(dim=-1, keepdim=True)
                     next_token = torch.multinomial(probs, num_samples=1)
             else:
-                next_token = torch.argmax(logits, dim=-1, keepdim=True)
+                next_token = torch.argmax(raw_logits, dim=-1, keepdim=True)
 
             input_ids = torch.cat([input_ids, next_token], dim=-1)
 
@@ -347,8 +349,21 @@ class DeepForCausalLM(nn.Module):
         config = ComplexityConfig.from_dict(config_dict)
 
         model = cls(config)
-        state_dict = torch.load(path / "model.pt", map_location=device)
+
+        # Try safetensors first, then .pt
+        safetensors_path = path / "model.safetensors"
+        pt_path = path / "model.pt"
+
+        if safetensors_path.exists():
+            from safetensors.torch import load_file
+            state_dict = load_file(str(safetensors_path), device=device)
+        elif pt_path.exists():
+            state_dict = torch.load(pt_path, map_location=device)
+        else:
+            raise FileNotFoundError(f"No model weights found in {path}. Expected model.safetensors or model.pt")
+
         model.load_state_dict(state_dict)
+        model = model.to(device)
 
         return model
 
