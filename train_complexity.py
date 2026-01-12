@@ -468,6 +468,22 @@ def train_optimized(
 
 SIZE_CONFIGS = ["tiny", "20m", "small", "150m", "base", "medium", "1b", "large", "3b", "3.8b", "7b"]
 
+# Optimal hyperparameters by model size (based on scaling laws)
+# lr scales roughly as 1/sqrt(params), warmup scales with model size
+SIZE_HYPERPARAMS = {
+    "tiny": {"lr": 3e-4, "warmup_steps": 500},      # ~50M
+    "20m": {"lr": 5e-4, "warmup_steps": 300},       # ~20M
+    "small": {"lr": 3e-4, "warmup_steps": 500},     # ~50M
+    "150m": {"lr": 1e-4, "warmup_steps": 2000},     # ~150M - was causing NaN at 3e-4!
+    "base": {"lr": 1e-4, "warmup_steps": 2000},     # ~250M
+    "medium": {"lr": 5e-5, "warmup_steps": 3000},   # ~760M
+    "1b": {"lr": 3e-5, "warmup_steps": 5000},       # ~1B
+    "large": {"lr": 3e-5, "warmup_steps": 5000},    # ~1.5B
+    "3b": {"lr": 2e-5, "warmup_steps": 8000},       # ~3B
+    "3.8b": {"lr": 1.5e-5, "warmup_steps": 10000},  # ~3.8B
+    "7b": {"lr": 1e-5, "warmup_steps": 10000},      # ~7B
+}
+
 
 def main():
     parser = argparse.ArgumentParser(description="Train Complexity model (CUDA Optimized)")
@@ -511,10 +527,10 @@ def main():
                         help="Max sequence length")
     parser.add_argument("--max-steps", type=int, default=1000000,
                         help="Max training steps (default: 1M)")
-    parser.add_argument("--lr", type=float, default=3e-4,
-                        help="Learning rate")
-    parser.add_argument("--warmup-steps", type=int, default=500,
-                        help="Warmup steps")
+    parser.add_argument("--lr", type=float, default=None,
+                        help="Learning rate (default: auto based on model size)")
+    parser.add_argument("--warmup-steps", type=int, default=None,
+                        help="Warmup steps (default: auto based on model size)")
     parser.add_argument("--weight-decay", type=float, default=0.1,
                         help="Weight decay")
 
@@ -543,6 +559,15 @@ def main():
                         help="Device (cuda/cpu/auto)")
 
     args = parser.parse_args()
+
+    # Apply optimal hyperparameters based on model size (if not overridden)
+    size_params = SIZE_HYPERPARAMS.get(args.size, SIZE_HYPERPARAMS["small"])
+    if args.lr is None:
+        args.lr = size_params["lr"]
+        print(f"Auto-setting lr={args.lr} for size={args.size}")
+    if args.warmup_steps is None:
+        args.warmup_steps = size_params["warmup_steps"]
+        print(f"Auto-setting warmup_steps={args.warmup_steps} for size={args.size}")
 
     # Device
     if args.device == "auto":
