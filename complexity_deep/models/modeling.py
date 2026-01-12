@@ -292,10 +292,19 @@ class DeepForCausalLM(nn.Module):
                 indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
                 logits[indices_to_remove] = float("-inf")
 
-            # Sample or greedy
+            # Sample or greedy with NaN/Inf protection
             if do_sample:
-                probs = F.softmax(logits, dim=-1)
-                next_token = torch.multinomial(probs, num_samples=1)
+                # Check for invalid logits
+                valid_logits = logits[logits != float('-inf')]
+                if valid_logits.numel() == 0 or torch.isnan(logits).any() or torch.isinf(logits).all():
+                    # Fallback to greedy
+                    next_token = torch.argmax(logits, dim=-1, keepdim=True)
+                else:
+                    probs = F.softmax(logits, dim=-1)
+                    # Clamp to avoid numerical issues
+                    probs = torch.clamp(probs, min=1e-8)
+                    probs = probs / probs.sum(dim=-1, keepdim=True)
+                    next_token = torch.multinomial(probs, num_samples=1)
             else:
                 next_token = torch.argmax(logits, dim=-1, keepdim=True)
 
