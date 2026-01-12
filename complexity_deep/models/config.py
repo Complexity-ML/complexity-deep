@@ -234,5 +234,9 @@ class ComplexityConfig:
 
     @classmethod
     def from_dict(cls, config_dict: dict) -> "ComplexityConfig":
-        """Create config from dictionary."""
-        return cls(**config_dict)
+        """Create config from dictionary, filtering invalid keys."""
+        import inspect
+        valid_params = set(inspect.signature(cls.__init__).parameters.keys())
+        valid_params.discard('self')
+        filtered = {k: v for k, v in config_dict.items() if k in valid_params}
+        return cls(**filtered)
