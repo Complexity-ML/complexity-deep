@@ -620,9 +620,28 @@ def main():
         print(f"\nResuming from {args.resume}")
         checkpoint = torch.load(args.resume, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
+
+        # Load optimizer state but override learning rate if specified
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-        scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+
+        # Override learning rate with command line argument
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = args.lr
+        print(f"Learning rate set to: {args.lr}")
+
+        # Recreate scheduler with new lr (don't load old scheduler state)
+        # This ensures the new lr is used going forward
         start_step = checkpoint["step"]
+
+        # Rebuild scheduler from current step
+        def lr_lambda_resume(step):
+            total_step = start_step + step
+            if total_step < args.warmup_steps:
+                return total_step / args.warmup_steps
+            return 0.5 * (1 + math.cos(math.pi * (total_step - args.warmup_steps) / (args.max_steps - args.warmup_steps)))
+
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda_resume)
+
         print(f"Resumed at step {start_step}")
 
     # Dataset
