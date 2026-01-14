@@ -131,6 +131,8 @@ def create_optimized_model(
                   "num_key_value_heads": 4, "intermediate_size": 1408, "num_experts": 4},  # ~50M
         "base": {"hidden_size": 1024, "num_hidden_layers": 16, "num_attention_heads": 16,
                  "num_key_value_heads": 4, "intermediate_size": 2816, "num_experts": 4},  # ~250M
+        "350m": {"hidden_size": 1280, "num_hidden_layers": 20, "num_attention_heads": 16,
+                 "num_key_value_heads": 4, "intermediate_size": 3456, "num_experts": 4},  # ~350M
         "medium": {"hidden_size": 1536, "num_hidden_layers": 24, "num_attention_heads": 16,
                    "num_key_value_heads": 4, "intermediate_size": 4096, "num_experts": 8},  # ~760M
         "1b": {"hidden_size": 2048, "num_hidden_layers": 24, "num_attention_heads": 16,
@@ -467,7 +469,7 @@ def train_optimized(
 # MAIN
 # ============================================================================
 
-SIZE_CONFIGS = ["tiny", "20m", "small", "150m", "base", "medium", "1b", "large", "3b", "3.8b", "7b"]
+SIZE_CONFIGS = ["tiny", "20m", "small", "150m", "base", "350m", "medium", "1b", "large", "3b", "3.8b", "7b"]
 
 # Optimal hyperparameters by model size (based on scaling laws)
 # lr scales roughly as 1/sqrt(params), warmup scales with model size
@@ -477,6 +479,7 @@ SIZE_HYPERPARAMS = {
     "small": {"lr": 3e-4, "warmup_steps": 500},     # ~50M
     "150m": {"lr": 1e-4, "warmup_steps": 2000},     # ~150M - was causing NaN at 3e-4!
     "base": {"lr": 1e-4, "warmup_steps": 2000},     # ~250M
+    "350m": {"lr": 8e-5, "warmup_steps": 2500},     # ~350M
     "medium": {"lr": 5e-5, "warmup_steps": 3000},   # ~760M
     "1b": {"lr": 3e-5, "warmup_steps": 5000},       # ~1B
     "large": {"lr": 3e-5, "warmup_steps": 5000},    # ~1.5B
