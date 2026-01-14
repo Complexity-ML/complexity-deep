@@ -259,7 +259,8 @@ class StreamingTextDataset(IterableDataset):
             if not text:
                 continue
 
-            tokens = self.tokenizer.encode(text)
+            # IMPORTANT: add_special_tokens=False to avoid <s> and </s> pollution
+            tokens = self.tokenizer.encode(text, add_special_tokens=False)
             buffer.extend(tokens)
 
             while len(buffer) >= self.max_length + 1:
