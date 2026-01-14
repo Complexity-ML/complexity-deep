@@ -37,7 +37,7 @@ def main():
     model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
     model.cuda()
-    model.bfloat16()
+    model.half()  # float16 for old checkpoint compatibility
 
     print(f"Model loaded: {sum(p.numel() for p in model.parameters()):,} params")
 
@@ -55,7 +55,6 @@ def main():
             do_sample=True,
             temperature=args.temperature,
             top_p=args.top_p,
-            pad_token_id=tokenizer.pad_token_id,
             eos_token_id=tokenizer.eos_token_id,
         )
 
