@@ -37,7 +37,7 @@ def main():
     model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
     model.cuda()
-    model.half()  # float16 for old checkpoint compatibility
+    model.bfloat16()  # bfloat16 - triton doesn't support fp16 sigmoid
 
     print(f"Model loaded: {sum(p.numel() for p in model.parameters()):,} params")
 
