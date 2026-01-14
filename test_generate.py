@@ -37,7 +37,8 @@ def main():
     model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
     model.cuda()
-    model.bfloat16()  # bfloat16 - triton doesn't support fp16 sigmoid
+    # Note: triton sigmoid only supports fp32/fp64, so we stay in fp32 for inference
+    # Training uses autocast which handles this properly
 
     print(f"Model loaded: {sum(p.numel() for p in model.parameters()):,} params")
 
