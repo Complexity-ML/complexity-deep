@@ -42,11 +42,14 @@ class DeepModel(nn.Module):
     Complexity Deep transformer model (decoder-only).
 
     Multicouche architecture per layer:
-        1. KQV Attention (perception)
+        1. Mu-Guided Attention (perception with top-down guidance)
         2. INL Dynamics (control with velocity)
         3. Token-Routed MLP (transformation)
 
-    Velocity is tracked across all layers for smooth trajectories.
+    INL Innovation (2025):
+        - mu from layer N guides attention in layer N+1
+        - Creates bidirectional flow: attention -> dynamics -> attention
+        - Velocity is tracked across all layers for smooth trajectories
     """
 
     def __init__(self, config: ComplexityConfig):
@@ -119,20 +122,26 @@ class DeepModel(nn.Module):
         if velocity_state is None:
             velocity_state = torch.zeros_like(hidden_states)
 
-        # Process through layers
+        # Process through layers with mu propagation
+        # mu from layer N guides attention in layer N+1 (top-down flow)
         new_past_key_values = [] if use_cache else None
+        mu_prev = None  # First layer has no mu guidance
 
         for idx, layer in enumerate(self.layers):
             past_kv = past_key_values[idx] if past_key_values is not None else None
 
-            hidden_states, velocity_state, new_past_kv = layer(
+            hidden_states, velocity_state, mu_current, new_past_kv = layer(
                 hidden_states,
                 velocity_states=velocity_state,
                 attention_mask=attention_mask,
                 past_key_value=past_kv,
                 use_cache=use_cache,
                 token_ids=input_ids,
+                mu_prev=mu_prev,  # INL: pass mu from previous layer
             )
+
+            # mu from this layer guides next layer's attention
+            mu_prev = mu_current
 
             if use_cache:
                 new_past_key_values.append(new_past_kv)

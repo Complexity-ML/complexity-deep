@@ -104,7 +104,7 @@ class INLDynamics(nn.Module):
         self,
         h: torch.Tensor,
         v: Optional[torch.Tensor] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Apply dynamics update.
 
@@ -115,6 +115,7 @@ class INLDynamics(nn.Module):
         Returns:
             h_next: Updated hidden states
             v_next: Updated velocity states
+            mu_contextual: Contextual equilibrium (passed to next layer's attention)
         """
         # Initialize velocity if not provided
         if v is None:
@@ -148,7 +149,8 @@ class INLDynamics(nn.Module):
 
         h_next = h + self.dt * gate * v_next          # position update
 
-        return h_next, v_next
+        # Return mu_contextual for next layer's attention (mu-guided QK)
+        return h_next, v_next, mu_contextual
 
     def init_velocity(self, batch_size: int, seq_len: int, device: torch.device) -> torch.Tensor:
         """Initialize velocity to zero."""
@@ -160,14 +162,19 @@ class DeepDecoderLayer(nn.Module):
     Complexity Deep decoder layer - multicouche robotics architecture.
 
     Architecture (3 components per layer):
-        1. KQV Attention - perception (what's important in context)
+        1. Mu-Guided Attention - perception guided by previous layer's mu
         2. INL Dynamics  - control (stabilize, smooth trajectories)
         3. Token-Routed MLP - transformation (compute features)
 
     Like a robot:
-        - Attention = eyes (perception)
+        - Attention = eyes (perception) - guided by mu (top-down)
         - Dynamics = cerebellum (motor control, balance)
         - MLP = muscles (action)
+
+    INL Innovation (2025):
+        - mu from layer N guides attention in layer N+1
+        - Creates bidirectional flow: attention -> dynamics -> attention
+        - This is the key to making mu cooperate with QKV
     """
 
     def __init__(
@@ -263,9 +270,10 @@ class DeepDecoderLayer(nn.Module):
         past_key_value: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
         use_cache: bool = False,
         token_ids: Optional[torch.Tensor] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor, Optional[Tuple[torch.Tensor, torch.Tensor]]]:
+        mu_prev: Optional[torch.Tensor] = None,  # INL: mu from previous layer
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, Optional[Tuple[torch.Tensor, torch.Tensor]]]:
         """
-        Forward pass through the 3-component layer.
+        Forward pass through the 3-component layer with mu-guided attention.
 
         Args:
             hidden_states: [batch, seq_len, hidden_size]
@@ -274,13 +282,16 @@ class DeepDecoderLayer(nn.Module):
             past_key_value: Optional cached KV
             use_cache: Whether to return KV cache
             token_ids: [batch, seq_len] - for Token-Routed MLP routing
+            mu_prev: [batch, seq_len, hidden_size] - mu from previous layer (guides attention)
 
         Returns:
             hidden_states: Updated hidden states
             velocity_states: Updated velocity states
+            mu_current: Contextual mu (passed to next layer)
             past_key_value: Optional updated KV cache
         """
-        # === 1. ATTENTION (perception) ===
+        # === 1. MU-GUIDED ATTENTION (perception) ===
+        # mu_prev from previous layer guides Q and K (top-down influence)
         residual = hidden_states
         hidden_states = self.input_layernorm(hidden_states)
         hidden_states, new_past_key_value = self.self_attn(
@@ -288,10 +299,12 @@ class DeepDecoderLayer(nn.Module):
             attention_mask=attention_mask,
             past_key_value=past_key_value,
             use_cache=use_cache,
+            mu_prev=mu_prev,  # INL: pass mu to guide attention
         )
 
         # === 2. DYNAMICS (control) ===
-        hidden_states, velocity_states = self.dynamics(hidden_states, velocity_states)
+        # Returns mu_current which will guide next layer's attention
+        hidden_states, velocity_states, mu_current = self.dynamics(hidden_states, velocity_states)
 
         hidden_states = residual + hidden_states
 
@@ -306,7 +319,7 @@ class DeepDecoderLayer(nn.Module):
 
         hidden_states = residual + hidden_states
 
-        return hidden_states, velocity_states, new_past_key_value
+        return hidden_states, velocity_states, mu_current, new_past_key_value
 
 
 # Alias for backward compatibility

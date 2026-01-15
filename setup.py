@@ -9,8 +9,8 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 setup(
     name="complexity-deep",
-    version="0.8.0",
-    description="Multicouche robotics architecture with KQV + INL Dynamics + Token-Routed MLP",
+    version="0.9.0",
+    description="Mu-Guided Attention: robotics dynamics + QKV cooperation for better convergence",
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="Pacific Prime",
