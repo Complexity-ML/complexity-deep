@@ -9,7 +9,7 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 setup(
     name="complexity-deep",
-    version="0.12.0",
+    version="0.12.1",
     description="All kernels fused via concat+cuBLAS: QKV, MLP gate+up, dynamics controller",
     long_description=long_description,
     long_description_content_type="text/markdown",

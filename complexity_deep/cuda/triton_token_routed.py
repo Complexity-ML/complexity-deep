@@ -226,14 +226,17 @@ if HAS_TRITON:
 
     def fused_swiglu_triton(gate: torch.Tensor, up: torch.Tensor) -> torch.Tensor:
         """Fused SwiGLU activation."""
-        n_elements = gate.numel()
-        output = torch.empty_like(gate)
+        # v0.12.0 fix: Use contiguous() for split tensors (non-contiguous after fused gate+up)
+        gate_c = gate.contiguous()
+        up_c = up.contiguous()
+        n_elements = gate_c.numel()
+        output = torch.empty_like(gate_c)
 
         BLOCK_SIZE = 1024
         grid = (triton.cdiv(n_elements, BLOCK_SIZE),)
 
         _fused_swiglu_kernel[grid](
-            gate.view(-1), up.view(-1), output.view(-1),
+            gate_c.view(-1), up_c.view(-1), output.view(-1),
             n_elements,
             BLOCK_SIZE=BLOCK_SIZE,
         )
