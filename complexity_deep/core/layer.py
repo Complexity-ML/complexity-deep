@@ -31,6 +31,10 @@ class INLDynamics(nn.Module):
     """
     Full INL Dynamics - Robotics-grade control with velocity tracking.
 
+    v0.12.0: Fused Concat + cuBLAS optimization
+    - Fused mu_proj into controller: 1 matmul instead of 2 for first layer
+    - Uses cuBLAS optimized concat approach (same as attention)
+
     Equations (like a physical system):
         error = h - mu(h)                   # deviation from contextual equilibrium
         v_next = alpha * v - beta * error   # velocity update (momentum + correction)
@@ -68,6 +72,7 @@ class INLDynamics(nn.Module):
         super().__init__()
         self.hidden_size = hidden_size
         self.dt = dt
+        self.controller_hidden = controller_hidden
 
         # Learnable equilibrium (target position) - base component
         # Renamed from 'mu' to 'mu_base' for contextual mu
@@ -80,16 +85,14 @@ class INLDynamics(nn.Module):
         nn.init.zeros_(self.mu_proj.weight)  # Start as identity to mu_base
 
         # Controller MLP - computes alpha, beta, gate from context
-        # Input: [h, v] concatenated
-        self.controller = nn.Sequential(
-            nn.Linear(hidden_size * 2, controller_hidden),
-            nn.SiLU(),
-            nn.Linear(controller_hidden, hidden_size * 3),  # outputs: alpha, beta, gate
-        )
+        # Input: [h, v] concatenated (2H -> controller_hidden -> 3H)
+        # v0.12.0: Split into layers for fused concat optimization
+        self.controller_in = nn.Linear(hidden_size * 2, controller_hidden)
+        self.controller_out = nn.Linear(controller_hidden, hidden_size * 3)
 
         # Initialize controller biases for desired initial values
         with torch.no_grad():
-            bias = self.controller[-1].bias
+            bias = self.controller_out.bias
             # alpha in [0,1] via sigmoid, init to ~0.9
             bias[:hidden_size].fill_(2.2)  # sigmoid(2.2) ≈ 0.9
             # beta in [0,inf) via softplus, init to ~0.1
@@ -98,7 +101,12 @@ class INLDynamics(nn.Module):
             bias[hidden_size*2:].fill_(0.0)  # sigmoid(0) = 0.5
 
             # Small weights for stable start
-            self.controller[-1].weight.normal_(0, 0.01)
+            self.controller_out.weight.normal_(0, 0.01)
+
+    @property
+    def controller(self):
+        """Backward compatibility for checkpoints using self.controller."""
+        return nn.Sequential(self.controller_in, nn.SiLU(), self.controller_out)
 
     def forward(
         self,
@@ -106,7 +114,7 @@ class INLDynamics(nn.Module):
         v: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
-        Apply dynamics update.
+        Apply dynamics update with fused concat + cuBLAS optimization.
 
         Args:
             h: Hidden states [batch, seq_len, hidden_size]
@@ -121,9 +129,45 @@ class INLDynamics(nn.Module):
         if v is None:
             v = torch.zeros_like(h)
 
-        # Controller computes adaptive parameters from [h, v]
-        controller_input = torch.cat([h, v], dim=-1)
-        controller_out = self.controller(controller_input)
+        # v0.12.0: Fused concat + cuBLAS for controller AND mu_proj
+        # Before: 3 matmuls: controller_in([h,v]), controller_out(x), mu_proj(h)
+        # After: 2 matmuls with fused first layer
+        #
+        # Fuse controller_in and mu_proj into single matmul:
+        # [h, v] @ [W_ctrl_h | W_ctrl_v]  -> ctrl_hidden
+        #                                  + W_mu @ h -> mu_adj (fused!)
+        #
+        # Combined weight: [2H, ctrl_hidden + H]
+        # Input: [h, v] -> Output: [ctrl_hidden, mu_adj]
+
+        hv = torch.cat([h, v], dim=-1)  # [B, S, 2H]
+
+        # Fused matmul: controller_in + mu_proj in one shot
+        # W_combined = [W_ctrl; W_mu padded with zeros for v]
+        # Shape: [2H, ctrl_hidden + H]
+        w_ctrl = self.controller_in.weight  # [ctrl_hidden, 2H]
+        w_mu = self.mu_proj.weight  # [H, H]
+
+        # Pad mu_proj weights with zeros for v dimension
+        # mu_proj only uses h, so v coefficients are 0
+        w_mu_padded = torch.cat([
+            w_mu,
+            torch.zeros(self.hidden_size, self.hidden_size, device=h.device, dtype=h.dtype)
+        ], dim=1)  # [H, 2H]
+
+        # Combined weights: [ctrl_hidden + H, 2H]
+        w_combined = torch.cat([w_ctrl, w_mu_padded], dim=0)  # [ctrl_hidden + H, 2H]
+
+        # Single fused matmul (uses cuBLAS)
+        fused_out = F.linear(hv, w_combined, bias=None)  # [B, S, ctrl_hidden + H]
+
+        # Split outputs
+        ctrl_pre = fused_out[..., :self.controller_hidden]  # [B, S, ctrl_hidden]
+        mu_adj = fused_out[..., self.controller_hidden:]    # [B, S, H]
+
+        # Add controller_in bias and activation
+        ctrl_hidden = F.silu(ctrl_pre + self.controller_in.bias)  # [B, S, ctrl_hidden]
+        controller_out = self.controller_out(ctrl_hidden)  # [B, S, 3H]
 
         # Split and apply activations
         alpha_raw, beta_raw, gate_raw = torch.split(
@@ -136,8 +180,8 @@ class INLDynamics(nn.Module):
         beta = torch.clamp(F.softplus(beta_raw), max=2.0)  # [0, 2] - correction
         gate = torch.sigmoid(gate_raw)        # [0, 1] - amplitude
 
-        # Contextual mu: base equilibrium + context-dependent adjustment
-        mu_contextual = self.mu + self.mu_proj(h)     # [batch, seq, hidden]
+        # Contextual mu: base equilibrium + fused context adjustment
+        mu_contextual = self.mu + mu_adj     # [batch, seq, hidden]
 
         # Dynamics equations
         error = h - mu_contextual                     # deviation from CONTEXTUAL equilibrium

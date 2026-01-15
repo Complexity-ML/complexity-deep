@@ -146,17 +146,15 @@ class DeepModel(nn.Module):
                 mu_prev=mu_prev,  # INL: pass mu from previous layer
             )
 
-            # INL 2025: Mu residual highway (Triton accelerated)
+            # INL 2025: Mu residual highway (v0.12.0: inplace optimized)
             # Accumulate mu across layers for richer context propagation
+            # Using inplace ops (add_) saves memory allocations
             if mu_residual is None:
                 mu_residual = mu_current.clone()
                 mu_prev = mu_current + 0.1 * mu_residual
-            elif HAS_FUSED_MU_RESIDUAL and mu_current.is_cuda:
-                # Fused Triton kernel: ~1.5x speedup
-                mu_prev, mu_residual = fused_mu_residual_highway(mu_current, mu_residual, 0.1)
             else:
-                # PyTorch fallback
-                mu_residual = mu_residual + mu_current
+                # v0.12.0: Inplace update - saves 1 allocation per layer
+                mu_residual.add_(mu_current)  # mu_residual += mu_current
                 mu_prev = mu_current + 0.1 * mu_residual
 
             if use_cache:

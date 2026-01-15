@@ -260,6 +260,7 @@ class TokenRoutedMLPTriton(nn.Module):
     """
     Token-Routed MLP with CGGR Triton optimization.
 
+    v0.12.0: Fused Gate+Up projection (2 GEMM -> 1 GEMM in CGGR path)
     5-6x faster than bmm version, 10x faster than loop version.
 
     Deterministic routing based on token ID:
@@ -289,12 +290,9 @@ class TokenRoutedMLPTriton(nn.Module):
 
         self.expert_intermediate_size = intermediate_size // num_experts
 
-        # Expert weights [num_experts, in_dim, out_dim]
-        self.gate_proj = nn.Parameter(
-            torch.randn(num_experts, hidden_size, self.expert_intermediate_size) * 0.02
-        )
-        self.up_proj = nn.Parameter(
-            torch.randn(num_experts, hidden_size, self.expert_intermediate_size) * 0.02
+        # v0.12.0: Fused gate+up projection [num_experts, hidden, 2*intermediate]
+        self.gate_up_proj = nn.Parameter(
+            torch.randn(num_experts, hidden_size, self.expert_intermediate_size * 2) * 0.02
         )
         self.down_proj = nn.Parameter(
             torch.randn(num_experts, self.expert_intermediate_size, hidden_size) * 0.02
@@ -314,6 +312,16 @@ class TokenRoutedMLPTriton(nn.Module):
         self.mu_router = nn.Linear(hidden_size, num_experts, bias=False)
         nn.init.zeros_(self.mu_router.weight)  # Start neutral
 
+    @property
+    def gate_proj(self):
+        """Backward compatibility: return gate portion of fused weights."""
+        return self.gate_up_proj[..., :self.expert_intermediate_size]
+
+    @property
+    def up_proj(self):
+        """Backward compatibility: return up portion of fused weights."""
+        return self.gate_up_proj[..., self.expert_intermediate_size:]
+
     def _create_token_mapping(self, vocab_size: int, num_experts: int) -> torch.Tensor:
         """Modulo routing for uniform expert distribution."""
         return torch.arange(vocab_size, dtype=torch.long) % num_experts
@@ -324,15 +332,15 @@ class TokenRoutedMLPTriton(nn.Module):
         expert_ids: torch.Tensor,
     ) -> torch.Tensor:
         """
-        CGGR-optimized forward pass.
+        CGGR-optimized forward pass with fused gate+up.
 
+        v0.12.0: Fused gate+up into single GEMM
         Steps:
         1. Sort tokens by expert
-        2. Grouped GEMM for gate_proj
-        3. Grouped GEMM for up_proj
-        4. Fused SwiGLU
-        5. Grouped GEMM for down_proj
-        6. Unsort back
+        2. Grouped GEMM for fused gate_up_proj (1 GEMM instead of 2!)
+        3. Split + Fused SwiGLU
+        4. Grouped GEMM for down_proj
+        5. Unsort back
         """
         total_tokens = hidden_states.shape[0]
 
@@ -341,17 +349,15 @@ class TokenRoutedMLPTriton(nn.Module):
             hidden_states, expert_ids, self.num_experts
         )
 
-        # Gate projection
+        # v0.12.0: Fused gate+up projection (1 GEMM instead of 2!)
         if HAS_TRITON and hidden_states.is_cuda:
-            gate_out = cggr_grouped_gemm_triton(sorted_hidden, self.gate_proj, expert_offsets)
+            gate_up_out = cggr_grouped_gemm_triton(sorted_hidden, self.gate_up_proj, expert_offsets)
         else:
-            gate_out = grouped_gemm_pytorch(sorted_hidden, self.gate_proj, expert_offsets, expert_counts)
+            gate_up_out = grouped_gemm_pytorch(sorted_hidden, self.gate_up_proj, expert_offsets, expert_counts)
 
-        # Up projection
-        if HAS_TRITON and hidden_states.is_cuda:
-            up_out = cggr_grouped_gemm_triton(sorted_hidden, self.up_proj, expert_offsets)
-        else:
-            up_out = grouped_gemm_pytorch(sorted_hidden, self.up_proj, expert_offsets, expert_counts)
+        # Split gate and up outputs
+        gate_out = gate_up_out[..., :self.expert_intermediate_size]
+        up_out = gate_up_out[..., self.expert_intermediate_size:]
 
         # Fused SwiGLU
         if HAS_TRITON and hidden_states.is_cuda:
@@ -377,17 +383,18 @@ class TokenRoutedMLPTriton(nn.Module):
         expert_ids: torch.Tensor,
     ) -> torch.Tensor:
         """
-        Fallback bmm-based forward (v1).
+        Fallback bmm-based forward with fused gate+up (v0.12.0).
         """
-        # Gather weights for each token's expert
-        gate_weights = self.gate_proj[expert_ids]
-        up_weights = self.up_proj[expert_ids]
-        down_weights = self.down_proj[expert_ids]
+        # v0.12.0: Fused gate+up - gather combined weights
+        gate_up_weights = self.gate_up_proj[expert_ids]  # [B*S, H, 2I]
+        down_weights = self.down_proj[expert_ids]  # [B*S, I, H]
 
-        # SwiGLU
-        gate_out = torch.bmm(hidden_states.unsqueeze(1), gate_weights).squeeze(1)
-        up_out = torch.bmm(hidden_states.unsqueeze(1), up_weights).squeeze(1)
+        # Single fused matmul for gate and up
+        gate_up_out = torch.bmm(hidden_states.unsqueeze(1), gate_up_weights).squeeze(1)  # [B*S, 2I]
 
+        # Split and apply SwiGLU
+        gate_out = gate_up_out[..., :self.expert_intermediate_size]
+        up_out = gate_up_out[..., self.expert_intermediate_size:]
         intermediate = self.act_fn(gate_out) * up_out
 
         output = torch.bmm(intermediate.unsqueeze(1), down_weights).squeeze(1)

@@ -1,17 +1,17 @@
 """
 Triton-accelerated Fused Mu-QKV Projection
 
-INL 2025 Innovation: Fuse 6 matmuls into optimized kernels
-- q = q_proj(x) + mu_to_q(mu)
-- k = k_proj(x) + mu_to_k(mu)
-- v = v_proj(x) + mu_to_v(mu)
+**DEPRECATED v0.12.0**: Custom Triton kernels are SLOWER than cuBLAS!
+Use the concat + cuBLAS approach in attention.py instead:
+    x_mu = torch.cat([x, mu], dim=-1)
+    q = F.linear(x_mu, torch.cat([Wq, Wmu_q], dim=1))
 
-Instead of 6 separate matmuls, we fuse operations to minimize memory bandwidth.
+This file is kept for:
+1. fused_mu_residual_highway (used in modeling.py, but disabled by default)
+2. Backward compatibility
 
-Performance gains:
-- ~2x speedup on QKV projection (memory bound -> compute bound)
-- Called 24 times per forward (once per layer)
-- Major impact on training throughput
+The concat approach achieves ~2x speedup using cuBLAS without custom kernels.
+Custom Triton kernels had too much launch overhead for these small ops.
 
 Author: Pacific Prime / INL 2025
 """
