@@ -9,7 +9,7 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 setup(
     name="complexity-deep",
-    version="0.7.1",
+    version="0.8.0",
     description="Multicouche robotics architecture with KQV + INL Dynamics + Token-Routed MLP",
     long_description=long_description,
     long_description_content_type="text/markdown",

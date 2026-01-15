@@ -50,19 +50,23 @@ expert_id = token_id % num_experts
 ### INL Dynamics Equations
 
 ```python
-error = h - mu                      # deviation from equilibrium
-v_next = alpha * v - beta * error   # velocity update (momentum + correction)
-h_next = h + dt * gate * v_next     # position update
+mu_contextual = mu_base + mu_proj(h)  # contextual equilibrium (NEW!)
+error = h - mu_contextual             # deviation from equilibrium
+v_next = alpha * v - beta * error     # velocity update (momentum + correction)
+h_next = h + dt * gate * v_next       # position update
 ```
 
 Where:
 - `h` = hidden state
 - `v` = velocity (momentum)
-- `mu` = learnable equilibrium point
+- `mu_base` = global learnable equilibrium point
+- `mu_proj` = context-dependent equilibrium adjustment (adapts per token)
 - `alpha` = inertia (0.9 default)
 - `beta` = correction strength (0.1 default)
 - `gate` = amplitude control
 - `dt` = integration timestep
+
+**Contextual Mu**: Unlike a fixed equilibrium, the contextual mu adapts to each token's hidden state. This allows different tokens (code vs text vs math) to have different attractors, improving model expressivity.
 
 ## Usage
 
@@ -113,7 +117,7 @@ loss = outputs.loss
 The INL Dynamics layer is inspired by robotics control theory:
 
 1. **Smooth Trajectories** - The velocity tracking prevents sudden jumps in hidden states
-2. **Stable Attractors** - The learnable mu provides stable equilibrium points
+2. **Contextual Attractors** - The contextual mu adapts equilibrium per token type
 3. **Momentum** - Alpha parameter allows the model to maintain momentum
 4. **Error Correction** - Beta parameter provides corrective feedback
 
@@ -121,6 +125,19 @@ This is particularly useful for:
 - Generating coherent long sequences
 - Maintaining consistency in outputs
 - Smooth interpolation in latent space
+- **Different behaviors for different content types** (code, text, math)
+
+### Training Note
+
+When training, exclude `mu` (the base equilibrium) from weight decay to allow it to learn freely:
+
+```python
+# In optimizer setup
+if 'bias' in name or 'norm' in name or ('.mu' in name and 'mu_proj' not in name):
+    no_decay_params.append(param)  # No weight decay for mu_base
+else:
+    decay_params.append(param)     # mu_proj.weight gets normal decay
+```
 
 ## CUDA Optimizations
 

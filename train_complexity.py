@@ -644,8 +644,10 @@ def main():
     for name, param in model.named_parameters():
         if not param.requires_grad:
             continue
-        # No weight decay for bias, norm, and mu (equilibrium point)
-        if 'bias' in name or 'norm' in name or '.mu' in name:
+        # No weight decay for bias, norm, and mu base (equilibrium point)
+        # Note: mu_proj.weight SHOULD have decay (it's a normal linear layer)
+        # So we match '.mu' but exclude 'mu_proj'
+        if 'bias' in name or 'norm' in name or ('.mu' in name and 'mu_proj' not in name):
             no_decay_params.append(param)
         else:
             decay_params.append(param)

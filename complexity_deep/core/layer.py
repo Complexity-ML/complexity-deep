@@ -32,7 +32,7 @@ class INLDynamics(nn.Module):
     Full INL Dynamics - Robotics-grade control with velocity tracking.
 
     Equations (like a physical system):
-        error = h - mu                      # deviation from equilibrium
+        error = h - mu(h)                   # deviation from contextual equilibrium
         v_next = alpha * v - beta * error   # velocity update (momentum + correction)
         h_next = h + dt * gate * v_next     # position update (integration)
 
@@ -40,7 +40,7 @@ class INLDynamics(nn.Module):
         - alpha: inertia (momentum, smooth movements)
         - beta: correction strength (feedback, error correction)
         - gate: amplitude control (safety, precision)
-        - mu: target equilibrium (where to converge)
+        - mu: CONTEXTUAL target equilibrium (adapts per token)
         - dt: timestep (integration speed)
 
     Benefits for robotics:
@@ -48,6 +48,12 @@ class INLDynamics(nn.Module):
         - Stable convergence (PID-like control)
         - Learnable dynamics per dimension
         - Real-time capable
+
+    Contextual mu:
+        mu = mu_base + mu_proj(h)
+        - mu_base: global equilibrium (like before)
+        - mu_proj: context-dependent adjustment (NEW)
+        This allows different tokens to have different attractors.
     """
 
     def __init__(
@@ -63,8 +69,15 @@ class INLDynamics(nn.Module):
         self.hidden_size = hidden_size
         self.dt = dt
 
-        # Learnable equilibrium (target position)
+        # Learnable equilibrium (target position) - base component
+        # Renamed from 'mu' to 'mu_base' for contextual mu
+        # But we keep 'mu' as alias for checkpoint compatibility
         self.mu = nn.Parameter(torch.zeros(hidden_size))
+
+        # Contextual mu projection - adapts equilibrium per token
+        # Initialized to zero so mu_contextual = mu_base at start (checkpoint compatible)
+        self.mu_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        nn.init.zeros_(self.mu_proj.weight)  # Start as identity to mu_base
 
         # Controller MLP - computes alpha, beta, gate from context
         # Input: [h, v] concatenated
@@ -122,8 +135,11 @@ class INLDynamics(nn.Module):
         beta = torch.clamp(F.softplus(beta_raw), max=2.0)  # [0, 2] - correction
         gate = torch.sigmoid(gate_raw)        # [0, 1] - amplitude
 
+        # Contextual mu: base equilibrium + context-dependent adjustment
+        mu_contextual = self.mu + self.mu_proj(h)     # [batch, seq, hidden]
+
         # Dynamics equations
-        error = h - self.mu                           # deviation from equilibrium
+        error = h - mu_contextual                     # deviation from CONTEXTUAL equilibrium
         v_next = alpha * v - beta * error             # velocity update
 
         # STABILITY: Clamp velocity to prevent runaway accumulation
