@@ -692,8 +692,13 @@ def main():
         checkpoint = torch.load(args.resume, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
 
-        # Load optimizer state (momentum, etc) but we'll override lr
-        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        # Try to load optimizer state, but skip if structure changed (e.g., new param groups)
+        try:
+            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            print("Optimizer state restored")
+        except ValueError as e:
+            print(f"Warning: Could not restore optimizer state ({e})")
+            print("Starting with fresh optimizer (momentum reset)")
         start_step = checkpoint["step"]
 
         # CRITICAL: Override learning rate BEFORE creating scheduler
