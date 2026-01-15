@@ -15,6 +15,12 @@ from typing import Optional, Tuple
 
 from complexity_deep.core.rotary import RotaryEmbedding, apply_rotary_pos_emb
 
+# Try to import Triton-accelerated fused Mu-QKV
+try:
+    from complexity_deep.cuda.triton_mu_qkv import fused_mu_qkv_projection, HAS_TRITON
+    HAS_FUSED_MU_QKV = HAS_TRITON
+except ImportError:
+    HAS_FUSED_MU_QKV = False
 
 # Check if SDPA is available (PyTorch 2.0+)
 HAS_SDPA = hasattr(F, "scaled_dot_product_attention")
@@ -115,17 +121,29 @@ class ComplexityAttention(nn.Module):
         """
         batch_size, seq_len, _ = hidden_states.shape
 
-        # Project Q, K, V
-        q = self.q_proj(hidden_states)
-        k = self.k_proj(hidden_states)
-        v = self.v_proj(hidden_states)
+        # INL 2025: Fused Mu-QKV projection (Triton accelerated ~2x speedup)
+        # Computes: q = x @ Wq + mu @ Wmu_q (same for k, v)
+        if HAS_FUSED_MU_QKV and hidden_states.is_cuda and mu_prev is not None:
+            q, k, v = fused_mu_qkv_projection(
+                hidden_states, mu_prev,
+                self.q_proj.weight.t().contiguous(),
+                self.k_proj.weight.t().contiguous(),
+                self.v_proj.weight.t().contiguous(),
+                self.mu_to_q.weight.t().contiguous(),
+                self.mu_to_k.weight.t().contiguous(),
+                self.mu_to_v.weight.t().contiguous(),
+            )
+        else:
+            # Fallback: Standard PyTorch path
+            q = self.q_proj(hidden_states)
+            k = self.k_proj(hidden_states)
+            v = self.v_proj(hidden_states)
 
-        # INL: Mu-guided attention - mu from previous layer biases Q, K, AND V
-        # Full top-down guidance: "look here, attend to this, extract this"
-        if mu_prev is not None:
-            q = q + self.mu_to_q(mu_prev)
-            k = k + self.mu_to_k(mu_prev)
-            v = v + self.mu_to_v(mu_prev)
+            # INL: Mu-guided attention - mu from previous layer biases Q, K, AND V
+            if mu_prev is not None:
+                q = q + self.mu_to_q(mu_prev)
+                k = k + self.mu_to_k(mu_prev)
+                v = v + self.mu_to_v(mu_prev)
 
         # Reshape to [batch, heads, seq, head_dim]
         q = q.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)

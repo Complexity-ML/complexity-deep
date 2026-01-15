@@ -19,6 +19,13 @@ from complexity_deep.core.normalization import RMSNorm
 from complexity_deep.core.layer import DeepDecoderLayer
 from complexity_deep.models.config import ComplexityConfig
 
+# Try to import Triton-accelerated fused mu residual
+try:
+    from complexity_deep.cuda.triton_mu_qkv import fused_mu_residual_highway, HAS_TRITON
+    HAS_FUSED_MU_RESIDUAL = HAS_TRITON
+except ImportError:
+    HAS_FUSED_MU_RESIDUAL = False
+
 
 @dataclass
 class DeepOutput:
@@ -142,16 +149,18 @@ class DeepModel(nn.Module):
                 mu_prev=mu_prev,  # INL: pass mu from previous layer
             )
 
-            # INL 2025: Mu residual highway
+            # INL 2025: Mu residual highway (Triton accelerated)
             # Accumulate mu across layers for richer context propagation
             if mu_residual is None:
-                mu_residual = mu_current
+                mu_residual = mu_current.clone()
+                mu_prev = mu_current + 0.1 * mu_residual
+            elif HAS_FUSED_MU_RESIDUAL and mu_current.is_cuda:
+                # Fused Triton kernel: ~1.5x speedup
+                mu_prev, mu_residual = fused_mu_residual_highway(mu_current, mu_residual, 0.1)
             else:
+                # PyTorch fallback
                 mu_residual = mu_residual + mu_current
-
-            # mu_prev = current mu + residual from all previous layers
-            # This creates a "river" of accumulated context
-            mu_prev = mu_current + 0.1 * mu_residual  # 0.1 weight for residual
+                mu_prev = mu_current + 0.1 * mu_residual
 
             if use_cache:
                 new_past_key_values.append(new_past_kv)

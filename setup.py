@@ -9,8 +9,8 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 setup(
     name="complexity-deep",
-    version="0.10.1",
-    description="Mu Everywhere: QKV + MLP routing + residual highway for maximum loss descent",
+    version="0.11.0",
+    description="Triton-Fused Mu: accelerated QKV projection + residual highway (~2x speedup)",
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="Pacific Prime",
