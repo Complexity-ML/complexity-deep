@@ -171,6 +171,9 @@ if HAS_TRITON:
     ):
         """
         Fused SwiGLU: silu(gate) * up
+
+        Note: tl.sigmoid only supports fp32/fp64, so we cast to fp32 for computation
+        and cast back to original dtype for storage.
         """
         pid = tl.program_id(0)
         block_start = pid * BLOCK_SIZE
@@ -181,8 +184,12 @@ if HAS_TRITON:
         up = tl.load(up_ptr + offsets, mask=mask, other=0.0)
 
         # SiLU: x * sigmoid(x)
-        silu_gate = gate * tl.sigmoid(gate)
-        out = silu_gate * up
+        # Cast to fp32 for sigmoid (tl.sigmoid doesn't support bf16/fp16)
+        gate_f32 = gate.to(tl.float32)
+        silu_gate = gate_f32 * tl.sigmoid(gate_f32)
+
+        # Cast back and multiply with up
+        out = silu_gate.to(gate.dtype) * up
 
         tl.store(output_ptr + offsets, out, mask=mask)
 

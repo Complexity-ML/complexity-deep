@@ -251,6 +251,7 @@ if HAS_TRITON:
                     up_acc += tl.dot(t, uw)
 
                 # SwiGLU activation
+                # gate_acc is already fp32 from tl.dot accumulation
                 silu_gate = gate_acc * tl.sigmoid(gate_acc)
                 swiglu = silu_gate * up_acc
 
@@ -415,11 +416,13 @@ if HAS_TRITON:
         gate_ptr, up_ptr, out_ptr,
         n_elements,
         BLOCK_SIZE: tl.constexpr,
-        USE_FP16: tl.constexpr
+        USE_FP16: tl.constexpr,
+        USE_BF16: tl.constexpr,
     ):
         """
         Simple fused SwiGLU: silu(gate) * up
         Based on llm-v3-dynamics pattern - BLOCK_SIZE=1024 for max throughput
+        Supports fp32, fp16, and bf16.
         """
         pid = tl.program_id(0)
         offsets = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
@@ -430,13 +433,15 @@ if HAS_TRITON:
         up = tl.load(up_ptr + offsets, mask=mask, other=0.0).to(tl.float32)
 
         # SwiGLU: silu(gate) * up = gate * sigmoid(gate) * up
-        # Manual sigmoid for FP16 compatibility: 1 / (1 + exp(-x))
+        # Manual sigmoid for FP16/BF16 compatibility: 1 / (1 + exp(-x))
         sigmoid_gate = 1.0 / (1.0 + tl.exp(-gate))
         silu_gate = gate * sigmoid_gate
         out = silu_gate * up
 
         # Cast back to original dtype if needed
-        if USE_FP16:
+        if USE_BF16:
+            out = out.to(tl.bfloat16)
+        elif USE_FP16:
             out = out.to(tl.float16)
 
         tl.store(out_ptr + offsets, out, mask=mask)
@@ -455,13 +460,15 @@ def fused_swiglu_simple(gate: torch.Tensor, up: torch.Tensor) -> torch.Tensor:
 
     # Detect dtype for proper cast back
     use_fp16 = gate.dtype == torch.float16
+    use_bf16 = gate.dtype == torch.bfloat16
 
     try:
         _simple_swiglu_kernel[grid](
             gate.view(-1), up.view(-1), out.view(-1),
             n_elements,
             BLOCK_SIZE=BLOCK_SIZE,
-            USE_FP16=use_fp16
+            USE_FP16=use_fp16,
+            USE_BF16=use_bf16,
         )
         return out.view_as(gate)
     except Exception as e:

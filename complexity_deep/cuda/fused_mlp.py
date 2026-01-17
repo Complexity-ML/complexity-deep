@@ -208,8 +208,10 @@ if HAS_TRITON:
             )
 
             # SwiGLU: silu(gate) * up
-            silu_gate = gate * tl.sigmoid(gate)
-            swiglu = silu_gate * up
+            # Cast to fp32 for sigmoid (tl.sigmoid doesn't support bf16/fp16)
+            gate_f32 = gate.to(tl.float32)
+            silu_gate = gate_f32 * tl.sigmoid(gate_f32)
+            swiglu = silu_gate.to(gate.dtype) * up
 
             # Load down weights
             down_w = tl.load(
@@ -326,8 +328,10 @@ if HAS_TRITON:
                 up_acc += tl.sum(x_norm[:, None] * up_w, axis=0)
 
             # SwiGLU
-            silu_gate = gate_acc * tl.sigmoid(gate_acc)
-            swiglu = silu_gate * up_acc
+            # Cast to fp32 for sigmoid (tl.sigmoid doesn't support bf16/fp16)
+            gate_acc_f32 = gate_acc.to(tl.float32)
+            silu_gate = gate_acc_f32 * tl.sigmoid(gate_acc_f32)
+            swiglu = silu_gate.to(gate_acc.dtype) * up_acc
 
             # Down projection contribution
             down_w = tl.load(
