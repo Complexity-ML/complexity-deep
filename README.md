@@ -3,7 +3,7 @@
 Complexity architecture with **INL Dynamics** for robotics-grade control.
 
 [![PyPI version](https://badge.fury.io/py/complexity-deep.svg)](https://badge.fury.io/py/complexity-deep)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18293026.svg)](https://doi.org/10.5281/zenodo.18293026)
 
 ## Installation
@@ -188,4 +188,7 @@ If you use Complexity-Deep in your research, please cite:
 
 ## License
 
-MIT
+CC BY-NC 4.0 (Creative Commons Attribution-NonCommercial 4.0)
+
+- **Research & Education**: Free to use
+- **Commercial use**: Contact boris.peyriguere@inl.fr for licensing
