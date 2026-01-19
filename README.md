@@ -171,7 +171,6 @@ Future architecture improvements under research:
 
 | Feature | Description | Status |
 |---------|-------------|--------|
-| **Mu Decay** | Mu influence attenuates with depth (`mu * decay^layer`) | Planned |
 | **Per-Layer Dynamics** | Different alpha/beta/gate per layer | Planned |
 | **Mu Attention** | Mu as persistent memory token in attention | Research |
 | **Sparse Mu** | Mu active only on top-k dimensions | Research |
