@@ -171,9 +171,6 @@ Future architecture improvements under research:
 
 | Feature | Description | Status |
 |---------|-------------|--------|
-| **Per-Layer Dynamics** | Different alpha/beta/gate per layer | Planned |
-| **Mu Attention** | Mu as persistent memory token in attention | Research |
-| **Sparse Mu** | Mu active only on top-k dimensions | Research |
 | **Speculative Decoding** | 2-3x faster inference | Planned |
 | **Continuous Batching** | Better throughput for serving | Planned |
 
