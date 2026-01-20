@@ -453,7 +453,7 @@ def main():
     from complexity_deep import DeepForCausalLM
 
     # Try multiple checkpoint names
-    checkpoint_names = ["model.pt", "final.pt", "checkpoint.pt", "last.pt"]
+    checkpoint_names = ["model.pt", "final.pt", "step_1000000.pt", "checkpoint.pt", "last.pt"]
     checkpoint_path = None
     for name in checkpoint_names:
         path = f"{args.checkpoint}/{name}"
