@@ -466,11 +466,23 @@ def main():
 
     print(f"Loading checkpoint: {checkpoint_path}")
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
-    config = checkpoint.get("config", {})
 
-    # Use from_dict() to filter out non-model config keys (like batch_size, lr, etc.)
+    # Load model config from config.json (not from checkpoint which has training params)
+    import json
+    config_json_path = f"{args.checkpoint}/config.json"
+    if os.path.exists(config_json_path):
+        with open(config_json_path) as f:
+            config = json.load(f)
+        print(f"Loaded model config from: {config_json_path}")
+    else:
+        # Fallback to checkpoint config
+        config = checkpoint.get("config", {})
+        print("Warning: No config.json found, using checkpoint config")
+
+    # Use from_dict() to filter out non-model config keys
     from complexity_deep import DeepConfig
     model_config = DeepConfig.from_dict(config)
+    print(f"Model: hidden_size={model_config.hidden_size}, layers={model_config.num_hidden_layers}, vocab={model_config.vocab_size}")
     model = DeepForCausalLM(model_config)
 
     # Handle different checkpoint formats (model_state_dict or model)
