@@ -468,8 +468,9 @@ def main():
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
     config = checkpoint.get("config", {})
 
-    from complexity_deep import DeepConfig
-    model_config = DeepConfig(**config)
+    # Use from_dict() to filter out non-model config keys (like batch_size, lr, etc.)
+    from complexity_deep import ComplexityConfig
+    model_config = ComplexityConfig.from_dict(config)
     model = DeepForCausalLM(model_config)
     model.load_state_dict(checkpoint["model"])
     model = model.to(device)
