@@ -452,7 +452,20 @@ def main():
     print(f"Loading model from: {args.checkpoint}")
     from complexity_deep import DeepForCausalLM
 
-    checkpoint = torch.load(f"{args.checkpoint}/model.pt", map_location="cpu", weights_only=False)
+    # Try multiple checkpoint names
+    checkpoint_names = ["model.pt", "final.pt", "checkpoint.pt", "last.pt"]
+    checkpoint_path = None
+    for name in checkpoint_names:
+        path = f"{args.checkpoint}/{name}"
+        if os.path.exists(path):
+            checkpoint_path = path
+            break
+
+    if checkpoint_path is None:
+        raise FileNotFoundError(f"No checkpoint found in {args.checkpoint}. Tried: {checkpoint_names}")
+
+    print(f"Loading checkpoint: {checkpoint_path}")
+    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
     config = checkpoint.get("config", {})
 
     from complexity_deep import DeepConfig
