@@ -18,7 +18,8 @@ training:
 
 data:
   datasets:
-    - name: "gsm8k"
+    - name: "openai/gsm8k"
+      subset: "main"
       weight: 0.2
     - name: "hendrycks/competition_math"
       weight: 0.3
