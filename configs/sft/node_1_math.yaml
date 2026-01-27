@@ -21,7 +21,7 @@ data:
     - name: "openai/gsm8k"
       subset: "main"
       weight: 0.2
-    - name: "lighteval/MATH"
+    - name: "AI-MO/NuminaMath-CoT"
       weight: 0.3
     - name: "meta-math/MetaMathQA"
       weight: 0.2
