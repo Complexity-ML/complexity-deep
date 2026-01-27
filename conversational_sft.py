@@ -441,7 +441,7 @@ def main():
     parser.add_argument("--dataset", type=str, required=True, help="HuggingFace dataset")
     parser.add_argument("--subset", type=str, default=None, help="Dataset subset")
     parser.add_argument("--format", type=str, default="auto",
-                       choices=["auto", "oasst", "sharegpt", "dolphin", "alpaca", "messages"],
+                       choices=["auto", "oasst", "sharegpt", "dolphin", "alpaca", "messages", "qa"],
                        help="Dataset format")
     parser.add_argument("--max-samples", type=int, default=None, help="Max samples")
     parser.add_argument("--token", type=str, default=None, help="HF token")
