@@ -9,7 +9,7 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 setup(
     name="complexity-deep",
-    version="0.13.0",
+    version="0.14.0",
     description="KQV order (industry standard), fused concat+cuBLAS, optimized KV-cache",
     long_description=long_description,
     long_description_content_type="text/markdown",
