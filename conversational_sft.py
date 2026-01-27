@@ -506,22 +506,29 @@ def main():
     print(f"Loading model: {args.checkpoint}")
     from complexity_deep import DeepForCausalLM, DeepConfig
 
-    # Find checkpoint
-    checkpoint_names = ["model.pt", "final.pt", "model.safetensors", "checkpoint.pt"]
-    checkpoint_path = None
-    for name in checkpoint_names:
-        path = f"{args.checkpoint}/{name}"
-        if os.path.exists(path):
-            checkpoint_path = path
-            break
+    # Find checkpoint - handle both file path and directory
+    if os.path.isfile(args.checkpoint):
+        # Direct file path provided
+        checkpoint_path = args.checkpoint
+        checkpoint_dir = os.path.dirname(args.checkpoint)
+    else:
+        # Directory provided - search for checkpoint files
+        checkpoint_dir = args.checkpoint
+        checkpoint_names = ["model.pt", "final.pt", "model.safetensors", "checkpoint.pt"]
+        checkpoint_path = None
+        for name in checkpoint_names:
+            path = f"{checkpoint_dir}/{name}"
+            if os.path.exists(path):
+                checkpoint_path = path
+                break
 
-    if checkpoint_path is None:
-        raise FileNotFoundError(f"No checkpoint in {args.checkpoint}")
+        if checkpoint_path is None:
+            raise FileNotFoundError(f"No checkpoint in {args.checkpoint}")
 
     print(f"Loading: {checkpoint_path}")
 
     # Load config
-    config_path = f"{args.checkpoint}/config.json"
+    config_path = f"{checkpoint_dir}/config.json"
     if os.path.exists(config_path):
         with open(config_path) as f:
             config = json.load(f)
