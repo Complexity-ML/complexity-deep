@@ -32,9 +32,14 @@ def train_from_config(config_path: str, dry_run: bool = False):
     config = load_config(config_path)
 
     # Build command
+    checkpoint_path = config["model"]["checkpoint"]
+    # Tokenizer is in the same directory as checkpoint
+    tokenizer_path = str(Path(checkpoint_path).parent)
+
     cmd = [
         "python", "conversational_sft.py",
-        "--checkpoint", config["model"]["checkpoint"],
+        "--checkpoint", checkpoint_path,
+        "--tokenizer", tokenizer_path,
         "--output", config["model"]["output"],
         "--epochs", str(config["training"]["epochs"]),
         "--batch-size", str(config["training"]["batch_size"]),
