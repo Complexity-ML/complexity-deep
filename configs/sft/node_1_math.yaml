@@ -21,7 +21,7 @@ data:
     - name: "openai/gsm8k"
       subset: "main"
       weight: 0.2
-    - name: "hendrycks/competition_math"
+    - name: "lighteval/MATH"
       weight: 0.3
     - name: "camel-ai/math"
       weight: 0.2
