@@ -173,10 +173,16 @@ def convert_to_messages(example: Dict[str, Any], format_name: str) -> List[Dict[
         return example.get("messages", [])
 
     elif format_name == "qa":
-        # Simple Q&A format (gsm8k, etc.)
+        # Simple Q&A format (gsm8k, MetaMath, NuminaMath, etc.)
         messages = []
-        question = example.get("question", example.get("prompt", ""))
-        answer = example.get("answer", example.get("response", example.get("output", "")))
+        question = example.get("question",
+                   example.get("prompt",
+                   example.get("query",
+                   example.get("problem", ""))))
+        answer = example.get("answer",
+                 example.get("response",
+                 example.get("solution",
+                 example.get("output", ""))))
         if question:
             messages.append({"role": "user", "content": question})
         if answer:
