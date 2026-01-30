@@ -265,7 +265,9 @@ class ConversationalDataset(Dataset):
 
         # Show sample
         if self.examples:
-            sample_messages = convert_to_messages(self.examples[0], self.format_name)
+            sample = self.examples[0]
+            sample_format = sample.get("_format", self.format_name) if isinstance(sample, dict) else self.format_name
+            sample_messages = convert_to_messages(sample, sample_format)
             sample_text = self.template.render(messages=sample_messages)
             print(f"\n--- Sample conversation ---")
             print(sample_text[:500] + "..." if len(sample_text) > 500 else sample_text)
