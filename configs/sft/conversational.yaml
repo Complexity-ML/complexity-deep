@@ -23,10 +23,10 @@ data:
     - name: "OpenAssistant/oasst1"
       weight: 0.3
       format: "oasst"
-    # ShareGPT - Diverse conversations
-    - name: "anon8231489123/ShareGPT_Vicuna_unfiltered"
+    # OpenOrca - High quality GPT-4 style conversations
+    - name: "Open-Orca/OpenOrca"
       weight: 0.25
-      format: "sharegpt"
+      format: "alpaca"
     # Dolphin - Clean instructional data
     - name: "cognitivecomputations/dolphin"
       subset: "flan1m-alpaca-uncensored"
