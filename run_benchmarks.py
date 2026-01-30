@@ -14,7 +14,7 @@ import sys
 # Add parent directory for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-from model import DeepForCausalLM, DeepConfig
+from complexity_deep import DeepForCausalLM, DeepConfig
 from transformers import AutoTokenizer
 
 
