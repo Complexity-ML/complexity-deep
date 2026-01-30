@@ -11,6 +11,9 @@ Supports:
 - Various datasets (OpenAssistant, ShareGPT, Dolphin, etc.)
 
 Usage:
+    # Using config file (recommended)
+    python conversational_sft.py --config configs/sft/conversational.yaml
+
     # OpenAssistant (high quality multi-turn)
     python conversational_sft.py --checkpoint ./model --dataset OpenAssistant/oasst1
 
@@ -23,6 +26,7 @@ Usage:
 
 import os
 import json
+import yaml
 import argparse
 import warnings
 from datetime import datetime
@@ -535,8 +539,11 @@ def train_epoch(
 def main():
     parser = argparse.ArgumentParser(description="Conversational SFT for Complexity")
 
+    # Config file
+    parser.add_argument("--config", type=str, default=None, help="YAML config file path")
+
     # Model
-    parser.add_argument("--checkpoint", type=str, required=True, help="Model checkpoint path")
+    parser.add_argument("--checkpoint", type=str, default=None, help="Model checkpoint path")
     parser.add_argument("--tokenizer", type=str, default=None, help="Tokenizer path")
 
     # Dataset
@@ -579,6 +586,56 @@ def main():
     parser.add_argument("--save-every", type=int, default=1, help="Save every N epochs")
 
     args = parser.parse_args()
+
+    # Load config file if provided
+    if args.config:
+        with open(args.config, 'r') as f:
+            config = yaml.safe_load(f)
+
+        # Map config to args (CLI args override config)
+        config_mapping = {
+            # Model
+            ('model', 'checkpoint'): 'checkpoint',
+            ('model', 'tokenizer'): 'tokenizer',
+            ('model', 'output'): 'output',
+            # Training
+            ('training', 'epochs'): 'epochs',
+            ('training', 'batch_size'): 'batch_size',
+            ('training', 'gradient_accumulation'): 'gradient_accumulation',
+            ('training', 'learning_rate'): 'lr',
+            ('training', 'weight_decay'): 'weight_decay',
+            ('training', 'max_length'): 'max_length',
+            ('training', 'warmup_ratio'): 'warmup_ratio',
+            ('training', 'gradient_checkpointing'): 'gradient_checkpointing',
+            ('training', 'bf16'): 'bf16',
+            # Data
+            ('data', 'max_samples'): 'max_samples',
+            ('data', 'format'): 'format',
+            # Template
+            ('template', 'name'): 'template',
+            ('template', 'mask_user'): None,  # Inverse of no_mask_user
+        }
+
+        for (section, key), arg_name in config_mapping.items():
+            if section in config and key in config[section]:
+                value = config[section][key]
+                if arg_name is None:
+                    # Special case: mask_user -> no_mask_user (inverse)
+                    if key == 'mask_user':
+                        if getattr(args, 'no_mask_user', None) is None:
+                            args.no_mask_user = not value
+                elif getattr(args, arg_name, None) is None or \
+                     (arg_name in ['epochs', 'batch_size', 'gradient_accumulation'] and
+                      getattr(args, arg_name) == parser.get_default(arg_name)):
+                    setattr(args, arg_name, value)
+
+        # Handle datasets from config
+        if 'data' in config and 'datasets' in config['data'] and not args.dataset and not args.datasets_json:
+            args.datasets_json = json.dumps(config['data']['datasets'])
+
+    # Validate required args
+    if not args.checkpoint:
+        parser.error("--checkpoint is required (or set model.checkpoint in config)")
 
     # Setup
     device = torch.device(args.device)
