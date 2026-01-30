@@ -37,7 +37,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 from torch.optim import AdamW
-from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim.lr_scheduler import CosineAnnealingLR, LambdaLR
 from torch.utils.tensorboard import SummaryWriter
 
 from datasets import load_dataset
@@ -457,8 +457,9 @@ class ConversationalDataset(Dataset):
 
 def collate_fn(batch, pad_token_id: int = 0):
     """Collate with padding."""
-    # Filter empty items
-    batch = [item for item in batch if item["input_ids"].shape[0] > 1]
+    # Filter empty items and items with no valid labels (all -100)
+    batch = [item for item in batch
+             if item["input_ids"].shape[0] > 1 and (item["labels"] != -100).any()]
     if not batch:
         return None
 
@@ -524,6 +525,12 @@ def train_epoch(
             outputs = model(input_ids, attention_mask=attention_mask, labels=labels)
             loss = outputs.loss / gradient_accumulation
 
+        # Check for NaN loss (training instability)
+        if torch.isnan(loss) or torch.isinf(loss):
+            print(f"\nWarning: NaN/Inf loss at batch {batch_idx}, skipping...")
+            optimizer.zero_grad()
+            continue
+
         # Backward
         if scaler:
             scaler.scale(loss).backward()
@@ -585,7 +592,7 @@ def main():
                        help="JSON array of datasets with weights: [{\"name\": \"...\", \"weight\": 0.3, \"subset\": \"...\"}]")
     parser.add_argument("--subset", type=str, default=None, help="Dataset subset")
     parser.add_argument("--format", type=str, default="auto",
-                       choices=["auto", "oasst", "sharegpt", "dolphin", "alpaca", "messages", "qa"],
+                       choices=["auto", "oasst", "sharegpt", "dolphin", "alpaca", "messages", "qa", "hh"],
                        help="Dataset format")
     parser.add_argument("--max-samples", type=int, default=None, help="Max samples (total across all datasets)")
     parser.add_argument("--token", type=str, default=None, help="HF token")
@@ -824,10 +831,22 @@ def main():
         betas=(0.9, 0.95),
     )
 
-    # Scheduler
+    # Scheduler with warmup
     total_steps = len(train_loader) * args.epochs // args.gradient_accumulation
     warmup_steps = int(total_steps * args.warmup_ratio)
-    scheduler = CosineAnnealingLR(optimizer, T_max=total_steps, eta_min=args.lr * 0.1)
+
+    def lr_lambda(current_step):
+        if current_step < warmup_steps:
+            # Linear warmup
+            return float(current_step) / float(max(1, warmup_steps))
+        else:
+            # Cosine decay after warmup
+            import math
+            progress = float(current_step - warmup_steps) / float(max(1, total_steps - warmup_steps))
+            return max(0.1, 0.5 * (1.0 + math.cos(math.pi * progress)))
+
+    scheduler = LambdaLR(optimizer, lr_lambda)
+    print(f"Scheduler: Linear warmup ({warmup_steps} steps) + Cosine decay (total {total_steps} steps)")
 
     # Scaler
     scaler = GradScaler() if args.bf16 and AMP_AVAILABLE else None
