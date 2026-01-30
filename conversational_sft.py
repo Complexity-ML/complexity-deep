@@ -336,6 +336,10 @@ class ConversationalDataset(Dataset):
                 ds_list = ds_list[:ds_max]
 
             print(f"  Loaded {len(ds_list)} samples")
+            # Store format with each example
+            ds_format = ds_config.get("format", format_name)
+            for ex in ds_list:
+                ex["_format"] = ds_format
             all_examples.extend(ds_list)
 
         # Shuffle combined dataset
@@ -361,8 +365,11 @@ class ConversationalDataset(Dataset):
     def __getitem__(self, idx):
         example = self.examples[idx]
 
+        # Get format: per-example format (from multi-dataset) or global format
+        format_to_use = example.get("_format", self.format_name) if isinstance(example, dict) else self.format_name
+
         # Convert to messages format
-        messages = convert_to_messages(example, self.format_name)
+        messages = convert_to_messages(example, format_to_use)
 
         if not messages:
             # Fallback for empty conversations
