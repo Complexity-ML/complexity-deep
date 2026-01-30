@@ -423,7 +423,8 @@ class ConversationalDataset(Dataset):
 
     def _create_masked_labels(self, messages: List[Dict], tokens: List[int]) -> torch.Tensor:
         """Create labels with -100 for user messages (no loss computed)."""
-        labels = torch.full((len(tokens),), -100, dtype=torch.long)
+        # Use Python list to avoid creating intermediate tensors in the loop
+        labels = [-100] * len(tokens)
 
         # Find assistant response positions
         # We tokenize incrementally to find boundaries
@@ -439,13 +440,15 @@ class ConversationalDataset(Dataset):
                 # Compute loss on assistant tokens
                 start_pos = current_pos
                 end_pos = min(len(partial_tokens), len(tokens))
-                labels[start_pos:end_pos] = torch.tensor(tokens[start_pos:end_pos], dtype=torch.long)
+                # Direct list slice assignment - no tensor creation
+                labels[start_pos:end_pos] = tokens[start_pos:end_pos]
 
             current_pos = len(partial_tokens)
             if current_pos >= len(tokens):
                 break
 
-        return labels
+        # Single tensor creation at the end
+        return torch.tensor(labels, dtype=torch.long)
 
     def _empty_item(self):
         """Return empty item for invalid examples."""
