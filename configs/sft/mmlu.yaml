@@ -18,11 +18,12 @@ training:
   bf16: true
 
 data:
+  split: "train"  # Default split for most datasets
   datasets:
     # MMLU auxiliary train - 99k examples
     - name: "cais/mmlu"
       subset: "all"
-      split: "auxiliary_train"
+      split: "auxiliary_train"  # MMLU uses this split name
       weight: 0.4
       format: "mmlu"
     # SciQ - Science questions

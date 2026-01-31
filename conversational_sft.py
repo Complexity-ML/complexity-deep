@@ -415,6 +415,7 @@ class ConversationalDataset(Dataset):
             ds_name = ds_config["name"]
             ds_weight = ds_config.get("weight", 1.0) / total_weight
             ds_subset = ds_config.get("subset", None)
+            ds_split = ds_config.get("split", split)  # Use per-dataset split if specified
 
             # Calculate samples for this dataset
             if max_samples:
@@ -422,21 +423,21 @@ class ConversationalDataset(Dataset):
             else:
                 ds_max = None
 
-            print(f"\n[{ds_name}] weight={ds_config.get('weight', 1.0):.2f} -> {ds_max or 'all'} samples")
+            print(f"\n[{ds_name}] weight={ds_config.get('weight', 1.0):.2f} -> {ds_max or 'all'} samples (split={ds_split})")
 
             try:
                 if ds_subset:
-                    ds = load_dataset(ds_name, ds_subset, split=split, token=token)
+                    ds = load_dataset(ds_name, ds_subset, split=ds_split, token=token)
                 else:
-                    ds = load_dataset(ds_name, split=split, token=token)
+                    ds = load_dataset(ds_name, split=ds_split, token=token)
             except Exception as e:
                 print(f"  Error: {e}")
                 print("  Trying with trust_remote_code=True...")
                 try:
                     if ds_subset:
-                        ds = load_dataset(ds_name, ds_subset, split=split, token=token, trust_remote_code=True)
+                        ds = load_dataset(ds_name, ds_subset, split=ds_split, token=token, trust_remote_code=True)
                     else:
-                        ds = load_dataset(ds_name, split=split, token=token, trust_remote_code=True)
+                        ds = load_dataset(ds_name, split=ds_split, token=token, trust_remote_code=True)
                 except Exception as e2:
                     print(f"  Failed to load {ds_name}: {e2}")
                     continue
