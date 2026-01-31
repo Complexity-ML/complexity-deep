@@ -1,0 +1,78 @@
+# MMLU SFT Configuration
+# Fine-tuning on MMLU + academic QA datasets for knowledge benchmarks
+
+model:
+  checkpoint: "./checkpoints/final.pt"
+  tokenizer: "./checkpoints/pacific-prime-math-v2"
+  output: "./checkpoints/pacific-prime-mmlu"
+
+training:
+  epochs: 5
+  batch_size: 4
+  gradient_accumulation: 16
+  learning_rate: 1e-5
+  weight_decay: 0.01
+  max_length: 512
+  warmup_ratio: 0.05
+  gradient_checkpointing: true
+  bf16: true
+
+data:
+  datasets:
+    # MMLU auxiliary train - 99k examples
+    - name: "cais/mmlu"
+      subset: "all"
+      split: "auxiliary_train"
+      weight: 0.4
+      format: "mmlu"
+    # SciQ - Science questions
+    - name: "allenai/sciq"
+      weight: 0.2
+      format: "sciq"
+    # ARC - Reasoning challenges
+    - name: "allenai/ai2_arc"
+      subset: "ARC-Challenge"
+      split: "train"
+      weight: 0.15
+      format: "arc"
+    - name: "allenai/ai2_arc"
+      subset: "ARC-Easy"
+      split: "train"
+      weight: 0.1
+      format: "arc"
+    # OpenBookQA
+    - name: "allenai/openbookqa"
+      split: "train"
+      weight: 0.15
+      format: "openbookqa"
+  max_samples: 150000
+
+template:
+  name: "qa"
+  format: |
+    Question: {question}
+
+    Choices:
+    A) {choice_a}
+    B) {choice_b}
+    C) {choice_c}
+    D) {choice_d}
+
+    Answer: {answer}
+
+logging:
+  tensorboard: true
+  log_every: 10
+  metrics:
+    - loss
+    - perplexity
+    - learning_rate
+
+specialization:
+  name: "mmlu"
+  skills:
+    - factual_knowledge
+    - multiple_choice
+    - academic_reasoning
+    - science
+    - math
