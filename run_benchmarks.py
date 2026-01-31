@@ -111,9 +111,16 @@ def run_mmlu(model, tokenizer, device: str = "cuda", max_samples: int = 500):
         if isinstance(answer, str):
             answer = ord(answer.upper()) - ord('A')
 
-        prompt = f"Question: {question}\n\nChoices:\nA) {choices[0]}\nB) {choices[1]}\nC) {choices[2]}\nD) {choices[3]}\n\nAnswer:"
+        prompt = f"Question: {question}\n\nAnswer:"
 
-        predicted = evaluate_multiple_choice(model, tokenizer, prompt, ["A", "B", "C", "D"], device)
+        # Compare full answer text, not just A/B/C/D letters
+        scores = []
+        for choice in choices:
+            text = f"{prompt} {choice}"
+            score = get_logprobs(model, tokenizer, text, device)
+            scores.append(score)
+
+        predicted = scores.index(max(scores))
 
         if predicted == answer:
             correct += 1
