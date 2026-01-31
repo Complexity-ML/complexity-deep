@@ -238,20 +238,29 @@ def convert_to_messages(example: Dict[str, Any], format_name: str) -> List[Dict[
         ]
 
     elif format_name == "sciq":
-        # SciQ format: question + support + correct_answer + distractors
+        # SciQ format: question + correct_answer + distractors → Convert to multiple choice
+        import random
         question = example.get("question", "")
         correct = example.get("correct_answer", "")
-        support = example.get("support", "")
+        distractor1 = example.get("distractor1", "")
+        distractor2 = example.get("distractor2", "")
+        distractor3 = example.get("distractor3", "")
 
-        user_content = f"Question: {question}"
-        if support:
-            assistant_content = f"{correct}\n\nExplanation: {support}"
-        else:
-            assistant_content = correct
+        # Build choices list and shuffle
+        choices = [correct, distractor1, distractor2, distractor3]
+        # Use hash of question for deterministic shuffle (reproducibility)
+        random.seed(hash(question) % (2**32))
+        random.shuffle(choices)
+        answer_idx = choices.index(correct)
+
+        # Format like MMLU/ARC
+        choice_letters = ["A", "B", "C", "D"]
+        choices_text = "\n".join([f"{choice_letters[i]}) {c}" for i, c in enumerate(choices)])
+        user_content = f"Question: {question}\n\nChoices:\n{choices_text}"
 
         return [
             {"role": "user", "content": user_content},
-            {"role": "assistant", "content": assistant_content}
+            {"role": "assistant", "content": f"The answer is {choice_letters[answer_idx]}) {correct}"}
         ]
 
     elif format_name == "arc":
@@ -300,6 +309,30 @@ def convert_to_messages(example: Dict[str, Any], format_name: str) -> List[Dict[
         return [
             {"role": "user", "content": user_content},
             {"role": "assistant", "content": f"The answer is {answer_key}) {answer_text}"}
+        ]
+
+    elif format_name == "hellaswag":
+        # HellaSwag format: ctx + endings → Convert to multiple choice
+        context = example.get("ctx", example.get("context", ""))
+        endings = example.get("endings", [])
+        label = example.get("label", 0)
+        if isinstance(label, str):
+            label = int(label)
+
+        # Ensure we have 4 endings
+        while len(endings) < 4:
+            endings.append("")
+
+        # Format as multiple choice like MMLU/ARC
+        choice_letters = ["A", "B", "C", "D"]
+        choices_text = "\n".join([f"{choice_letters[i]}) {endings[i]}" for i in range(4)])
+        user_content = f"Complete the following:\n\n{context}\n\nChoices:\n{choices_text}"
+
+        answer_text = endings[label] if label < len(endings) else endings[0]
+
+        return [
+            {"role": "user", "content": user_content},
+            {"role": "assistant", "content": f"The answer is {choice_letters[label]}) {answer_text}"}
         ]
 
     else:

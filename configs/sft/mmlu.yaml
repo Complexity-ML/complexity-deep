@@ -2,12 +2,12 @@
 # Fine-tuning on MMLU + academic QA datasets for knowledge benchmarks
 
 model:
-  checkpoint: "./checkpoints/final.pt"
+  checkpoint: "./checkpoints-conv-sft/checkpoint_epoch5.pt"
   tokenizer: "./checkpoints/pacific-prime-math-v2"
   output: "./checkpoints/pacific-prime-mmlu"
 
 training:
-  epochs: 5
+  epochs: 15
   batch_size: 4
   gradient_accumulation: 16
   learning_rate: 1e-5
@@ -20,32 +20,37 @@ training:
 data:
   split: "train"  # Default split for most datasets
   datasets:
-    # MMLU auxiliary train - 99k examples
+    # MMLU auxiliary train - 99k examples (boosted weight for grokking hunt)
     - name: "cais/mmlu"
       subset: "all"
       split: "auxiliary_train"  # MMLU uses this split name
-      weight: 0.4
+      weight: 0.50
       format: "mmlu"
     # SciQ - Science questions
     - name: "allenai/sciq"
-      weight: 0.2
+      weight: 0.12
       format: "sciq"
     # ARC - Reasoning challenges
     - name: "allenai/ai2_arc"
       subset: "ARC-Challenge"
       split: "train"
-      weight: 0.15
+      weight: 0.08
       format: "arc"
     - name: "allenai/ai2_arc"
       subset: "ARC-Easy"
       split: "train"
-      weight: 0.1
+      weight: 0.08
       format: "arc"
     # OpenBookQA
     - name: "allenai/openbookqa"
       split: "train"
-      weight: 0.15
+      weight: 0.10
       format: "openbookqa"
+    # HellaSwag - Sentence completion (added for transfer learning)
+    - name: "Rowan/hellaswag"
+      split: "train"
+      weight: 0.12
+      format: "hellaswag"
   max_samples: 150000
 
 template:
