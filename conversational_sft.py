@@ -216,6 +216,92 @@ def convert_to_messages(example: Dict[str, Any], format_name: str) -> List[Dict[
                     messages.append({"role": "assistant", "content": content})
         return messages
 
+    elif format_name == "mmlu":
+        # MMLU format: question + choices + answer
+        question = example.get("question", "")
+        choices = example.get("choices", [])
+        answer_idx = example.get("answer", 0)
+        if isinstance(answer_idx, str):
+            answer_idx = ord(answer_idx.upper()) - ord('A')
+
+        # Build question with choices
+        choice_letters = ["A", "B", "C", "D"]
+        choices_text = "\n".join([f"{choice_letters[i]}) {c}" for i, c in enumerate(choices)])
+        user_content = f"Question: {question}\n\nChoices:\n{choices_text}"
+
+        # Answer is the correct choice text
+        answer_text = choices[answer_idx] if answer_idx < len(choices) else choices[0]
+
+        return [
+            {"role": "user", "content": user_content},
+            {"role": "assistant", "content": f"The answer is {choice_letters[answer_idx]}) {answer_text}"}
+        ]
+
+    elif format_name == "sciq":
+        # SciQ format: question + support + correct_answer + distractors
+        question = example.get("question", "")
+        correct = example.get("correct_answer", "")
+        support = example.get("support", "")
+
+        user_content = f"Question: {question}"
+        if support:
+            assistant_content = f"{correct}\n\nExplanation: {support}"
+        else:
+            assistant_content = correct
+
+        return [
+            {"role": "user", "content": user_content},
+            {"role": "assistant", "content": assistant_content}
+        ]
+
+    elif format_name == "arc":
+        # ARC format: question + choices + answerKey
+        question = example.get("question", "")
+        choices_data = example.get("choices", {})
+        texts = choices_data.get("text", [])
+        labels = choices_data.get("label", [])
+        answer_key = example.get("answerKey", "A")
+
+        # Build choices text
+        choices_text = "\n".join([f"{labels[i]}) {texts[i]}" for i in range(len(texts))])
+        user_content = f"Question: {question}\n\nChoices:\n{choices_text}"
+
+        # Find answer text
+        try:
+            answer_idx = labels.index(answer_key)
+            answer_text = texts[answer_idx]
+        except ValueError:
+            answer_text = texts[0] if texts else ""
+            answer_key = labels[0] if labels else "A"
+
+        return [
+            {"role": "user", "content": user_content},
+            {"role": "assistant", "content": f"The answer is {answer_key}) {answer_text}"}
+        ]
+
+    elif format_name == "openbookqa":
+        # OpenBookQA format: similar to ARC
+        question = example.get("question_stem", example.get("question", ""))
+        choices_data = example.get("choices", {})
+        texts = choices_data.get("text", [])
+        labels = choices_data.get("label", [])
+        answer_key = example.get("answerKey", "A")
+
+        choices_text = "\n".join([f"{labels[i]}) {texts[i]}" for i in range(len(texts))])
+        user_content = f"Question: {question}\n\nChoices:\n{choices_text}"
+
+        try:
+            answer_idx = labels.index(answer_key)
+            answer_text = texts[answer_idx]
+        except ValueError:
+            answer_text = texts[0] if texts else ""
+            answer_key = labels[0] if labels else "A"
+
+        return [
+            {"role": "user", "content": user_content},
+            {"role": "assistant", "content": f"The answer is {answer_key}) {answer_text}"}
+        ]
+
     else:
         # Try to auto-detect
         if "messages" in example:
