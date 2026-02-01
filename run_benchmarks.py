@@ -259,10 +259,10 @@ def main():
     parser = argparse.ArgumentParser(description="Run benchmarks on COMPLEXITY-DEEP model")
     parser.add_argument("--checkpoint", type=str, default="./checkpoints/final.pt",
                         help="Path to model checkpoint")
-    parser.add_argument("--config", type=str, default="./checkpoints/pacific-prime-math-v2/config.json",
-                        help="Path to model config")
-    parser.add_argument("--tokenizer", type=str, default="./checkpoints/pacific-prime-math-v2",
-                        help="Path to tokenizer")
+    parser.add_argument("--config", type=str, default=None,
+                        help="Path to model config (default: same dir as checkpoint)")
+    parser.add_argument("--tokenizer", type=str, default=None,
+                        help="Path to tokenizer (default: same dir as checkpoint)")
     parser.add_argument("--device", type=str, default="cuda", help="Device to use")
     parser.add_argument("--max-samples", type=int, default=500,
                         help="Max samples per benchmark (for faster testing)")
@@ -273,6 +273,13 @@ def main():
                         help="Output file for results")
 
     args = parser.parse_args()
+
+    # Auto-derive config and tokenizer from checkpoint directory if not provided
+    checkpoint_dir = str(Path(args.checkpoint).parent)
+    if args.config is None:
+        args.config = str(Path(checkpoint_dir) / "config.json")
+    if args.tokenizer is None:
+        args.tokenizer = checkpoint_dir
 
     # Setup logging to file and console
     log_file = f"benchmark_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
