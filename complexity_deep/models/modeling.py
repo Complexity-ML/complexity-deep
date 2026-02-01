@@ -7,6 +7,14 @@ Multicouche robotics architecture:
 - Token-Routed MLP (transformation)
 
 Full velocity tracking for smooth, stable trajectories.
+
+Numerical Stability:
+    Multiple clamping mechanisms prevent NaN/inf explosions:
+    - velocity_state clamped to [-10, 10] in INLDynamics
+    - beta (correction gain) clamped to [0, 2] via softplus
+    - token_ids clamped to [0, vocab_size-1] for safe indexing
+    - Optional safety_clamp module for mu and hidden states
+    - probs clamped to min=1e-8 to avoid log(0) in sampling
 """
 
 import torch
@@ -54,6 +62,11 @@ class DeepModel(nn.Module):
         - mu from layer N guides attention in layer N+1
         - Creates bidirectional flow: attention -> dynamics -> attention
         - Velocity is tracked across all layers for smooth trajectories
+
+    Stability:
+        - Velocity clamped to [-10, 10] per layer (prevents runaway dynamics)
+        - Mu residual accumulates across layers (can grow) - use safety_clamp if needed
+        - All intermediate values use bf16/fp16 safe ranges
     """
 
     def __init__(self, config: ComplexityConfig):
