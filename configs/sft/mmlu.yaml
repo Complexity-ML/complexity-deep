@@ -2,8 +2,8 @@
 # Fine-tuning on MMLU + academic QA datasets for knowledge benchmarks
 
 model:
-  checkpoint: "./checkpoints-conv-sft/checkpoint_epoch5.pt"
-  tokenizer: "./checkpoints/pacific-prime-math-v2"
+  checkpoint: "./checkpoints/checkpoint_epoch5.pt"
+  tokenizer: "./checkpoints"
   output: "./checkpoints/pacific-prime-mmlu"
 
 training:
