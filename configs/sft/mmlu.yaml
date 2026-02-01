@@ -7,7 +7,7 @@ model:
   output: "./checkpoints-conv-sft"
 
 training:
-  epochs: 20
+  epochs: 23
   batch_size: 8
   gradient_accumulation: 4
   learning_rate: 5e-6
