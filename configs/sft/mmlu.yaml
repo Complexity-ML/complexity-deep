@@ -2,15 +2,15 @@
 # Fine-tuning on MMLU + academic QA datasets for knowledge benchmarks
 
 model:
-  checkpoint: "./checkpoints/checkpoint_epoch5.pt"
-  tokenizer: "./checkpoints"
-  output: "./checkpoints/pacific-prime-mmlu"
+  checkpoint: "./checkpoints-conv-sft/checkpoint_epoch15.pt"
+  tokenizer: "./checkpoints-conv-sft"
+  output: "./checkpoints-conv-sft"
 
 training:
-  epochs: 15
+  epochs: 20
   batch_size: 8
   gradient_accumulation: 4
-  learning_rate: 1e-5
+  learning_rate: 5e-6
   weight_decay: 0.01
   max_length: 512
   warmup_ratio: 0.05
