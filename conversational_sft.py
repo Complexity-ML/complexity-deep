@@ -62,6 +62,40 @@ except ImportError:
         AMP_AVAILABLE = False
 
 
+def cleanup_old_checkpoints(output_dir: str, keep_last: int = 5) -> None:
+    """
+    Delete old checkpoints, keeping only the last N.
+
+    Args:
+        output_dir: Directory containing checkpoints
+        keep_last: Number of recent checkpoints to keep (default: 5)
+    """
+    import glob
+
+    # Find all checkpoint files
+    pattern = os.path.join(output_dir, "checkpoint_epoch*.pt")
+    checkpoints = glob.glob(pattern)
+
+    if len(checkpoints) <= keep_last:
+        return
+
+    # Sort by epoch number
+    def get_epoch(path):
+        match = re.search(r'checkpoint_epoch(\d+)\.pt', path)
+        return int(match.group(1)) if match else 0
+
+    checkpoints.sort(key=get_epoch)
+
+    # Delete old ones
+    to_delete = checkpoints[:-keep_last]
+    for ckpt in to_delete:
+        try:
+            os.remove(ckpt)
+            print(f"Deleted old checkpoint: {ckpt}")
+        except OSError as e:
+            print(f"Warning: Could not delete {ckpt}: {e}")
+
+
 # ============================================================================
 # CHAT TEMPLATES (Jinja2)
 # ============================================================================
@@ -1019,6 +1053,9 @@ def main():
                 "chat_template": chat_template,
             }, save_path)
             print(f"Saved: {save_path}")
+
+            # Cleanup old checkpoints - keep only last 5
+            cleanup_old_checkpoints(args.output, keep_last=5)
 
     # Save final model
     final_path = f"{args.output}/model_conv_sft.pt"
