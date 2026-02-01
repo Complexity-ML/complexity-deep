@@ -23,11 +23,11 @@ class TokenRoutedMLP(nn.Module):
     - Deterministic = stable training, no load balancing loss
     - 100% parallel (no routing decisions at runtime)
 
-    Token routing strategy:
-        Expert 0: Token IDs 0 to vocab_size/4       (most frequent)
-        Expert 1: Token IDs vocab_size/4 to /2
-        Expert 2: Token IDs vocab_size/2 to 3/4
-        Expert 3: Token IDs 3*vocab_size/4 to end   (most rare)
+    Token routing strategy (v2 - modulo):
+        expert_id = token_id % num_experts
+
+        Uniform distribution across experts regardless of token frequency.
+        Prevents expert collapse where frequent tokens would overload one expert.
     """
 
     def __init__(
