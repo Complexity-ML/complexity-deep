@@ -53,19 +53,52 @@ def load_model(checkpoint_dir: str = "checkpoints", device: str = None):
         dynamics_controller_hidden=cfg.get("dynamics_controller_hidden", 64),
     )
 
-    # Find latest checkpoint
-    checkpoints = list(checkpoint_dir.glob("step_*.safetensors"))
-    if checkpoints:
-        latest = max(checkpoints, key=lambda p: int(p.stem.split("_")[1]))
-    else:
+    # Find latest checkpoint - support both .safetensors and .pt
+    safetensors_ckpts = list(checkpoint_dir.glob("step_*.safetensors"))
+    pt_ckpts = list(checkpoint_dir.glob("checkpoint_epoch*.pt")) + list(checkpoint_dir.glob("step_*.pt"))
+
+    latest = None
+    is_pt = False
+
+    if safetensors_ckpts:
+        latest = max(safetensors_ckpts, key=lambda p: int(p.stem.split("_")[1]))
+    elif pt_ckpts:
+        # Sort by epoch/step number
+        def get_num(p):
+            name = p.stem
+            if "epoch" in name:
+                return int(name.split("epoch")[1])
+            return int(name.split("_")[1])
+        latest = max(pt_ckpts, key=get_num)
+        is_pt = True
+    elif (checkpoint_dir / "model.safetensors").exists():
         latest = checkpoint_dir / "model.safetensors"
+    elif (checkpoint_dir / "final.pt").exists():
+        latest = checkpoint_dir / "final.pt"
+        is_pt = True
+
+    if latest is None:
+        raise FileNotFoundError(f"No checkpoint found in {checkpoint_dir}")
 
     print(f"Loading model from {latest}")
     print(f"Device: {device}")
 
     # Load model
     model = DeepForCausalLM(config)
-    state_dict = load_file(latest)
+
+    if is_pt or latest.suffix == ".pt":
+        # Load .pt checkpoint (training format)
+        ckpt = torch.load(latest, map_location="cpu", weights_only=False)
+        if "model" in ckpt:
+            state_dict = ckpt["model"]
+        else:
+            state_dict = ckpt
+        # Strip 'model.' prefix if present
+        state_dict = {k.removeprefix("model."): v for k, v in state_dict.items()}
+    else:
+        # Load safetensors
+        state_dict = load_file(latest)
+
     model.load_state_dict(state_dict, strict=False)
     model.eval()
     model = model.to(device)
