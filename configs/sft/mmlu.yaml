@@ -2,12 +2,12 @@
 # Fine-tuning on MMLU + academic QA datasets for knowledge benchmarks
 
 model:
-  checkpoint: "./checkpoints-conv-sft/checkpoint_epoch15.pt"
+  checkpoint: "./checkpoints-conv-sft/checkpoint_epoch23.pt"
   tokenizer: "./checkpoints-conv-sft"
   output: "./checkpoints-conv-sft"
 
 training:
-  epochs: 23
+  epochs: 24
   batch_size: 8
   gradient_accumulation: 4
   learning_rate: 5e-6
