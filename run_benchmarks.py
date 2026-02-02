@@ -67,22 +67,38 @@ def load_tokenizer(tokenizer_path: str):
 
 
 @torch.no_grad()
-def get_logprobs(model, tokenizer, text: str, device: str = "cuda"):
-    """Get log probabilities for a text sequence."""
-    inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=2048)
-    inputs = {k: v.to(device) for k, v in inputs.items()}
+def get_logprobs(model, tokenizer, prompt: str, completion: str, device: str = "cuda"):
+    """Get log probabilities for the completion only (not the prompt).
 
-    outputs = model(inputs["input_ids"])
+    This is the correct way to evaluate multiple choice: we compute the
+    probability of generating the completion given the prompt.
+    """
+    # Tokenize prompt and full text separately
+    prompt_ids = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048)["input_ids"]
+    full_text = prompt + completion
+    full_ids = tokenizer(full_text, return_tensors="pt", truncation=True, max_length=2048)["input_ids"]
+
+    prompt_len = prompt_ids.shape[1]
+    full_ids = full_ids.to(device)
+
+    outputs = model(full_ids)
     logits = outputs.logits if hasattr(outputs, 'logits') else outputs[0]
 
     # Compute log probabilities
     log_probs = torch.log_softmax(logits, dim=-1)
 
-    # Get log prob of each token given previous tokens
-    token_ids = inputs["input_ids"][0]
+    # Get log prob of ONLY completion tokens (starting after prompt)
+    token_ids = full_ids[0]
     total_logprob = 0.0
-    for i in range(1, len(token_ids)):
+    num_completion_tokens = 0
+
+    for i in range(prompt_len, len(token_ids)):
         total_logprob += log_probs[0, i-1, token_ids[i]].item()
+        num_completion_tokens += 1
+
+    # Normalize by number of completion tokens to avoid length bias
+    if num_completion_tokens > 0:
+        total_logprob = total_logprob / num_completion_tokens
 
     return total_logprob
 
@@ -91,10 +107,11 @@ def get_logprobs(model, tokenizer, text: str, device: str = "cuda"):
 def evaluate_multiple_choice(model, tokenizer, question: str, choices: list, device: str = "cuda"):
     """Evaluate multiple choice question by comparing log probabilities."""
     scores = []
+    prompt = f"User: {question}\n\nAssistant:"
 
     for choice in choices:
-        text = f"{question} {choice}"
-        score = get_logprobs(model, tokenizer, text, device)
+        completion = f" {choice}"
+        score = get_logprobs(model, tokenizer, prompt, completion, device)
         scores.append(score)
 
     predicted = scores.index(max(scores))
@@ -130,12 +147,13 @@ def run_mmlu(model, tokenizer, device: str = "cuda", max_samples: int = 500):
         # Build prompt with chat template format (matches SFT training)
         user_msg = f"Question: {question}\n\nChoices:\nA) {choices[0]}\nB) {choices[1]}\nC) {choices[2]}\nD) {choices[3]}"
 
-        # Compare using chat template format
+        # Compare using chat template format - only score the completion part
+        prompt = f"User: {user_msg}\n\nAssistant:"
         choice_letters = ["A", "B", "C", "D"]
         scores = []
         for i, choice in enumerate(choices):
-            text = f"User: {user_msg}\n\nAssistant: The answer is {choice_letters[i]}) {choice}"
-            score = get_logprobs(model, tokenizer, text, device)
+            completion = f" The answer is {choice_letters[i]}) {choice}"
+            score = get_logprobs(model, tokenizer, prompt, completion, device)
             scores.append(score)
 
         predicted = scores.index(max(scores))
@@ -170,10 +188,11 @@ def run_hellaswag(model, tokenizer, device: str = "cuda", max_samples: int = 500
         answer = int(sample["label"])
 
         scores = []
+        prompt = f"User: Complete this sentence: {context}\n\nAssistant:"
         for ending in endings:
-            # Chat template format
-            text = f"User: Complete this sentence: {context}\n\nAssistant: {ending}"
-            score = get_logprobs(model, tokenizer, text, device)
+            # Chat template format - only score the completion
+            completion = f" {ending}"
+            score = get_logprobs(model, tokenizer, prompt, completion, device)
             scores.append(score)
 
         predicted = scores.index(max(scores))
@@ -214,13 +233,13 @@ def run_arc(model, tokenizer, device: str = "cuda", max_samples: int = 500, chal
         except ValueError:
             continue
 
-        # Chat template format
-        user_msg = f"Question: {question}"
+        # Chat template format - only score the completion
+        prompt = f"User: Question: {question}\n\nAssistant:"
 
         scores = []
         for choice in choices:
-            text = f"User: {user_msg}\n\nAssistant: The answer is {choice}"
-            score = get_logprobs(model, tokenizer, text, device)
+            completion = f" The answer is {choice}"
+            score = get_logprobs(model, tokenizer, prompt, completion, device)
             scores.append(score)
 
         predicted = scores.index(max(scores))
@@ -255,15 +274,16 @@ def run_winogrande(model, tokenizer, device: str = "cuda", max_samples: int = 50
         option2 = sample["option2"]
         answer = int(sample["answer"]) - 1  # 1 or 2 -> 0 or 1
 
-        # Replace _ with each option, using chat template format
+        # Replace _ with each option, using chat template format - only score completion
         completed1 = sentence.replace("_", option1)
         completed2 = sentence.replace("_", option2)
 
-        text1 = f"User: Complete the sentence: {sentence}\n\nAssistant: {completed1}"
-        text2 = f"User: Complete the sentence: {sentence}\n\nAssistant: {completed2}"
+        prompt = f"User: Complete the sentence: {sentence}\n\nAssistant:"
+        completion1 = f" {completed1}"
+        completion2 = f" {completed2}"
 
-        score1 = get_logprobs(model, tokenizer, text1, device)
-        score2 = get_logprobs(model, tokenizer, text2, device)
+        score1 = get_logprobs(model, tokenizer, prompt, completion1, device)
+        score2 = get_logprobs(model, tokenizer, prompt, completion2, device)
 
         predicted = 0 if score1 > score2 else 1
 
