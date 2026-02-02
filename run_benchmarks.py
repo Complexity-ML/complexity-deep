@@ -39,6 +39,9 @@ def load_model(checkpoint_path: str, config_path: str, device: str = "cuda"):
     else:
         state_dict = checkpoint
 
+    # Strip 'model.' prefix from keys (training checkpoint format)
+    state_dict = {k.removeprefix("model."): v for k, v in state_dict.items()}
+
     model.load_state_dict(state_dict, strict=False)
     model = model.to(device).eval()
 
