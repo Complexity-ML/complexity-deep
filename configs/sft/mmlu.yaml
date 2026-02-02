@@ -8,8 +8,8 @@ model:
 
 training:
   epochs: 50
-  batch_size: 24
-  gradient_accumulation: 2
+  batch_size: 16
+  gradient_accumulation: 3
   learning_rate: 5e-6
   weight_decay: 0.01
   max_length: 512
