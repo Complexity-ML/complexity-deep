@@ -42,6 +42,19 @@ def load_model(checkpoint_path: str, config_path: str, device: str = "cuda"):
     # Strip 'model.' prefix from keys (training checkpoint format)
     state_dict = {k.removeprefix("model."): v for k, v in state_dict.items()}
 
+    # Debug: check weight loading
+    model_keys = set(dict(model.named_parameters()).keys())
+    ckpt_keys = set(state_dict.keys())
+    matched = model_keys & ckpt_keys
+    missing = model_keys - ckpt_keys
+    unexpected = ckpt_keys - model_keys
+    print(f"Checkpoint keys: {len(ckpt_keys)}, Model params: {len(model_keys)}")
+    print(f"Matched: {len(matched)}, Missing: {len(missing)}, Unexpected: {len(unexpected)}")
+    if missing:
+        print(f"Missing keys (first 5): {list(missing)[:5]}")
+    if unexpected:
+        print(f"Unexpected keys (first 5): {list(unexpected)[:5]}")
+
     model.load_state_dict(state_dict, strict=False)
     model = model.to(device).eval()
 
