@@ -127,14 +127,14 @@ def run_mmlu(model, tokenizer, device: str = "cuda", max_samples: int = 500):
         if isinstance(answer, str):
             answer = ord(answer.upper()) - ord('A')
 
-        # Build prompt with choices (matches SFT training format)
-        prompt = f"Question: {question}\n\nChoices:\nA) {choices[0]}\nB) {choices[1]}\nC) {choices[2]}\nD) {choices[3]}"
+        # Build prompt with chat template format (matches SFT training)
+        user_msg = f"Question: {question}\n\nChoices:\nA) {choices[0]}\nB) {choices[1]}\nC) {choices[2]}\nD) {choices[3]}"
 
-        # Compare using exact training format: "The answer is X) text"
+        # Compare using chat template format
         choice_letters = ["A", "B", "C", "D"]
         scores = []
         for i, choice in enumerate(choices):
-            text = f"{prompt}\n\nThe answer is {choice_letters[i]}) {choice}"
+            text = f"User: {user_msg}\n\nAssistant: The answer is {choice_letters[i]}) {choice}"
             score = get_logprobs(model, tokenizer, text, device)
             scores.append(score)
 
@@ -171,7 +171,8 @@ def run_hellaswag(model, tokenizer, device: str = "cuda", max_samples: int = 500
 
         scores = []
         for ending in endings:
-            text = f"{context} {ending}"
+            # Chat template format
+            text = f"User: Complete this sentence: {context}\n\nAssistant: {ending}"
             score = get_logprobs(model, tokenizer, text, device)
             scores.append(score)
 
@@ -213,11 +214,12 @@ def run_arc(model, tokenizer, device: str = "cuda", max_samples: int = 500, chal
         except ValueError:
             continue
 
-        prompt = f"Question: {question}\n\nAnswer:"
+        # Chat template format
+        user_msg = f"Question: {question}"
 
         scores = []
         for choice in choices:
-            text = f"{prompt} {choice}"
+            text = f"User: {user_msg}\n\nAssistant: The answer is {choice}"
             score = get_logprobs(model, tokenizer, text, device)
             scores.append(score)
 
@@ -253,9 +255,12 @@ def run_winogrande(model, tokenizer, device: str = "cuda", max_samples: int = 50
         option2 = sample["option2"]
         answer = int(sample["answer"]) - 1  # 1 or 2 -> 0 or 1
 
-        # Replace _ with each option
-        text1 = sentence.replace("_", option1)
-        text2 = sentence.replace("_", option2)
+        # Replace _ with each option, using chat template format
+        completed1 = sentence.replace("_", option1)
+        completed2 = sentence.replace("_", option2)
+
+        text1 = f"User: Complete the sentence: {sentence}\n\nAssistant: {completed1}"
+        text2 = f"User: Complete the sentence: {sentence}\n\nAssistant: {completed2}"
 
         score1 = get_logprobs(model, tokenizer, text1, device)
         score2 = get_logprobs(model, tokenizer, text2, device)
