@@ -39,8 +39,8 @@ def load_model(checkpoint_path: str, config_path: str, device: str = "cuda"):
     else:
         state_dict = checkpoint
 
-    # Note: Do NOT strip 'model.' prefix - the model expects keys like 'model.layers.X...'
-    # state_dict = {k.removeprefix("model."): v for k, v in state_dict.items()}
+    # Add 'model.' prefix - checkpoint has 'layers.X' but model expects 'model.layers.X'
+    state_dict = {f"model.{k}" if not k.startswith("model.") else k: v for k, v in state_dict.items()}
 
     # Debug: check weight loading
     model_keys = set(dict(model.named_parameters()).keys())
