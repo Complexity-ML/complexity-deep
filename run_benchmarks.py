@@ -152,12 +152,12 @@ def run_mmlu(model, tokenizer, device: str = "cuda", max_samples: int = 500):
         # Build prompt with chat template format (matches SFT training)
         user_msg = f"Question: {question}\n\nChoices:\nA) {choices[0]}\nB) {choices[1]}\nC) {choices[2]}\nD) {choices[3]}"
 
-        # Compare using chat template format - only score the completion part
-        prompt = f"User: {user_msg}\n\nAssistant:"
+        # Compare using chat template format - score just the letter (simpler, more reliable)
+        prompt = f"User: {user_msg}\n\nAssistant: The answer is"
         choice_letters = ["A", "B", "C", "D"]
         scores = []
         for i, choice in enumerate(choices):
-            completion = f" The answer is {choice_letters[i]}) {choice}"
+            completion = f" {choice_letters[i]}"  # Just score the letter
             score = get_logprobs(model, tokenizer, prompt, completion, device)
             scores.append(score)
 
