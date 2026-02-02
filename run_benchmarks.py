@@ -208,6 +208,12 @@ def run_hellaswag(model, tokenizer, device: str = "cuda", max_samples: int = 500
 
         predicted = scores.index(max(scores))
 
+        # Debug: print first 3 samples
+        if total < 3:
+            logging.info(f"Context: {context[:60]}...")
+            logging.info(f"Scores: {[f'{s:.3f}' for s in scores]}")
+            logging.info(f"Predicted: {predicted}, Correct: {answer}")
+
         if predicted == answer:
             correct += 1
         total += 1
@@ -245,15 +251,22 @@ def run_arc(model, tokenizer, device: str = "cuda", max_samples: int = 500, chal
             continue
 
         # Chat template format - only score the completion
-        prompt = f"User: Question: {question}\n\nAssistant:"
+        prompt = f"User: Question: {question}\n\nAssistant: The answer is"
 
         scores = []
         for choice in choices:
-            completion = f" The answer is {choice}"
+            completion = f" {choice}"
             score = get_logprobs(model, tokenizer, prompt, completion, device)
             scores.append(score)
 
         predicted = scores.index(max(scores))
+
+        # Debug: print first 3 samples
+        if total < 3:
+            logging.info(f"Q: {question[:60]}...")
+            logging.info(f"Choices: {choices}")
+            logging.info(f"Scores: {[f'{s:.3f}' for s in scores]}")
+            logging.info(f"Predicted: {predicted}, Correct: {answer_idx}")
 
         if predicted == answer_idx:
             correct += 1
@@ -297,6 +310,13 @@ def run_winogrande(model, tokenizer, device: str = "cuda", max_samples: int = 50
         score2 = get_logprobs(model, tokenizer, prompt, completion2, device)
 
         predicted = 0 if score1 > score2 else 1
+
+        # Debug: print first 3 samples
+        if total < 3:
+            logging.info(f"Sentence: {sentence[:60]}...")
+            logging.info(f"Options: {option1} vs {option2}")
+            logging.info(f"Scores: {score1:.3f} vs {score2:.3f}")
+            logging.info(f"Predicted: {predicted}, Correct: {answer}")
 
         if predicted == answer:
             correct += 1
