@@ -163,6 +163,12 @@ def run_mmlu(model, tokenizer, device: str = "cuda", max_samples: int = 500):
 
         predicted = scores.index(max(scores))
 
+        # Debug: print first 5 samples
+        if total < 5:
+            logging.info(f"Q: {question[:50]}...")
+            logging.info(f"Scores: A={scores[0]:.3f}, B={scores[1]:.3f}, C={scores[2]:.3f}, D={scores[3]:.3f}")
+            logging.info(f"Predicted: {choice_letters[predicted]}, Correct: {choice_letters[answer]}")
+
         if predicted == answer:
             correct += 1
         total += 1
