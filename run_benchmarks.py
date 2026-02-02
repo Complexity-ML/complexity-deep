@@ -72,14 +72,19 @@ def get_logprobs(model, tokenizer, prompt: str, completion: str, device: str = "
 
     This is the correct way to evaluate multiple choice: we compute the
     probability of generating the completion given the prompt.
-    """
-    # Tokenize prompt and full text separately
-    prompt_ids = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048)["input_ids"]
-    full_text = prompt + completion
-    full_ids = tokenizer(full_text, return_tensors="pt", truncation=True, max_length=2048)["input_ids"]
 
+    Important: We concatenate token IDs manually to avoid BPE tokenization
+    differences between tokenizing prompt alone vs prompt+completion together.
+    """
+    # Tokenize prompt with special tokens (BOS)
+    prompt_ids = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048, add_special_tokens=True)["input_ids"]
     prompt_len = prompt_ids.shape[1]
-    full_ids = full_ids.to(device)
+
+    # Tokenize completion WITHOUT special tokens
+    completion_ids = tokenizer(completion, return_tensors="pt", truncation=True, max_length=2048, add_special_tokens=False)["input_ids"]
+
+    # Concatenate manually to preserve exact prompt tokenization
+    full_ids = torch.cat([prompt_ids, completion_ids], dim=1).to(device)
 
     outputs = model(full_ids)
     logits = outputs.logits if hasattr(outputs, 'logits') else outputs[0]
