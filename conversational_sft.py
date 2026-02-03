@@ -640,8 +640,45 @@ def collate_fn(batch, pad_token_id: int = 0):
 
 
 # ============================================================================
-# TRAINING
+# TRAINING & EVALUATION
 # ============================================================================
+
+def evaluate(
+    model: nn.Module,
+    dataloader: DataLoader,
+    device: torch.device,
+    use_amp: bool = True,
+) -> tuple:
+    """Evaluate model on validation set."""
+    model.eval()
+    total_loss = 0
+    num_batches = 0
+
+    with torch.no_grad():
+        for batch in tqdm(dataloader, desc="Evaluating", leave=False):
+            if batch is None:
+                continue
+
+            input_ids = batch["input_ids"].to(device)
+            labels = batch["labels"].to(device)
+            attention_mask = batch["attention_mask"].to(device)
+
+            if use_amp and AMP_AVAILABLE:
+                with autocast(device_type="cuda", dtype=torch.bfloat16):
+                    outputs = model(input_ids, attention_mask=attention_mask, labels=labels)
+                    loss = outputs.loss
+            else:
+                outputs = model(input_ids, attention_mask=attention_mask, labels=labels)
+                loss = outputs.loss
+
+            if not torch.isnan(loss) and not torch.isinf(loss):
+                total_loss += loss.item()
+                num_batches += 1
+
+    avg_loss = total_loss / max(num_batches, 1)
+    perplexity = math.exp(min(avg_loss, 20))
+    return avg_loss, perplexity
+
 
 def train_epoch(
     model: nn.Module,
@@ -787,6 +824,10 @@ def main():
     parser.add_argument("--output", type=str, default="./checkpoints-conv-sft", help="Output dir")
     parser.add_argument("--save-every", type=int, default=1, help="Save every N epochs")
 
+    # Validation
+    parser.add_argument("--val-split", type=float, default=0.05, help="Validation split ratio (0 to disable)")
+    parser.add_argument("--eval-every", type=int, default=1, help="Evaluate every N epochs")
+
     args = parser.parse_args()
 
     # Load config file if provided
@@ -816,6 +857,9 @@ def main():
             # Template
             ('template', 'name'): 'template',
             ('template', 'mask_user'): None,  # Inverse of no_mask_user
+            # Validation
+            ('validation', 'split'): 'val_split',
+            ('validation', 'eval_every'): 'eval_every',
         }
 
         for (section, key), arg_name in config_mapping.items():
@@ -979,10 +1023,32 @@ def main():
     else:
         raise ValueError("Must provide --dataset or --datasets-json")
 
-    # DataLoader
+    # Split dataset into train/val if requested
     pad_token_id = tokenizer.pad_token_id or 0
+    val_loader = None
+
+    if args.val_split > 0:
+        from torch.utils.data import random_split
+        val_size = int(len(dataset) * args.val_split)
+        train_size = len(dataset) - val_size
+        train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+        print(f"Split: {train_size} train / {val_size} val ({args.val_split*100:.1f}%)")
+
+        val_loader = DataLoader(
+            val_dataset,
+            batch_size=args.batch_size,
+            shuffle=False,
+            collate_fn=lambda b: collate_fn(b, pad_token_id),
+            num_workers=args.num_workers,
+            pin_memory=True,
+        )
+    else:
+        train_dataset = dataset
+        print("Validation: DISABLED")
+
+    # DataLoader
     train_loader = DataLoader(
-        dataset,
+        train_dataset,
         batch_size=args.batch_size,
         shuffle=True,
         collate_fn=lambda b: collate_fn(b, pad_token_id),
@@ -1039,7 +1105,19 @@ def main():
             use_amp=args.bf16,
         )
 
-        print(f"Epoch {epoch} - Average loss: {avg_loss:.4f}")
+        print(f"Epoch {epoch} - Train loss: {avg_loss:.4f}")
+
+        # Validation
+        if val_loader is not None and epoch % args.eval_every == 0:
+            val_loss, val_ppl = evaluate(
+                model=model,
+                dataloader=val_loader,
+                device=device,
+                use_amp=args.bf16,
+            )
+            writer.add_scalar("val/loss", val_loss, global_step)
+            writer.add_scalar("val/perplexity", val_ppl, global_step)
+            print(f"Epoch {epoch} - Val loss: {val_loss:.4f}, Val PPL: {val_ppl:.2f}")
 
         # Save checkpoint
         if epoch % args.save_every == 0:

@@ -2,7 +2,7 @@
 # Fine-tuning on MMLU + academic QA datasets for knowledge benchmarks
 
 model:
-  checkpoint: "./checkpoints-conv-sft/checkpoint_epoch23.pt"
+  checkpoint: "./checkpoints-conv-sft/checkpoint_epoch16.pt"
   tokenizer: "./checkpoints-conv-sft"
   output: "./checkpoints-conv-sft"
 
@@ -66,6 +66,10 @@ template:
 
     Answer: {answer}
 
+validation:
+  split: 0.05          # 5% des données pour validation
+  eval_every: 1        # Évaluer à chaque epoch
+
 logging:
   tensorboard: true
   log_every: 10
@@ -73,6 +77,8 @@ logging:
     - loss
     - perplexity
     - learning_rate
+    - val_loss
+    - val_perplexity
 
 specialization:
   name: "mmlu"
