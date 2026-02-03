@@ -18,23 +18,23 @@ training:
 
 data:
   datasets:
-    # MMLU - General knowledge benchmark (10%)
+    # MMLU - General knowledge benchmark (5% - conservateur pour spécialiste)
     - name: "cais/mmlu"
       subset: "all"
       split: "auxiliary_train"
-      weight: 0.10
+      weight: 0.05
       format: "mmlu"
     - name: "bigcode/starcoderdata"
       subset: "python"
-      weight: 0.27
+      weight: 0.285
     - name: "codeparrot/apps"
-      weight: 0.18
+      weight: 0.19
     - name: "openai/humaneval"
-      weight: 0.09
+      weight: 0.095
     - name: "deepmind/code_contests"
-      weight: 0.18
+      weight: 0.19
     - name: "sahil2801/CodeAlpaca-20k"
-      weight: 0.18
+      weight: 0.19
   format: "sharegpt"
   max_samples: 500000
 
