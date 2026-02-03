@@ -2,7 +2,7 @@
 # Fine-tuning on MMLU + academic QA datasets for knowledge benchmarks
 
 model:
-  checkpoint: "./checkpoints-conv-sft/checkpoint_epoch16.pt"
+  checkpoint: "./checkpoints-conv-sft/checkpoint_epoch6.pt"
   tokenizer: "./checkpoints-conv-sft"
   output: "./checkpoints-conv-sft"
 
@@ -26,7 +26,7 @@ data:
       split: "auxiliary_train"  # MMLU uses this split name
       weight: 0.40
       format: "mmlu"
-    # SciQ - Science questions
+    # SciQ - Science questions (transfert général)
     - name: "allenai/sciq"
       weight: 0.15
       format: "sciq"
@@ -34,23 +34,24 @@ data:
     - name: "allenai/ai2_arc"
       subset: "ARC-Challenge"
       split: "train"
-      weight: 0.10
+      weight: 0.12
       format: "arc"
     - name: "allenai/ai2_arc"
       subset: "ARC-Easy"
       split: "train"
-      weight: 0.10
+      weight: 0.08
       format: "arc"
-    # OpenBookQA
-    - name: "allenai/openbookqa"
-      split: "train"
-      weight: 0.12
-      format: "openbookqa"
-    # HellaSwag - Sentence completion (added for transfer learning)
+    # HellaSwag - Sentence completion
     - name: "Rowan/hellaswag"
       split: "train"
-      weight: 0.13
+      weight: 0.15
       format: "hellaswag"
+    # WinoGrande - Coreference resolution
+    - name: "winogrande"
+      subset: "winogrande_xl"
+      split: "train"
+      weight: 0.10
+      format: "winogrande"
   max_samples: 150000
 
 template:

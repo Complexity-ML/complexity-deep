@@ -369,6 +369,28 @@ def convert_to_messages(example: Dict[str, Any], format_name: str) -> List[Dict[
             {"role": "assistant", "content": f"The answer is {choice_letters[label]}) {answer_text}"}
         ]
 
+    elif format_name == "winogrande":
+        # WinoGrande format: sentence with "_" placeholder + 2 options
+        sentence = example.get("sentence", "")
+        option1 = example.get("option1", "")
+        option2 = example.get("option2", "")
+        answer = example.get("answer", "1")
+        if isinstance(answer, str):
+            answer = int(answer) - 1  # "1" or "2" -> 0 or 1
+        else:
+            answer = answer - 1
+
+        # Format as binary choice
+        user_content = f"Fill in the blank with the correct option:\n\n{sentence}\n\nOptions:\nA) {option1}\nB) {option2}"
+
+        answer_text = option1 if answer == 0 else option2
+        answer_letter = "A" if answer == 0 else "B"
+
+        return [
+            {"role": "user", "content": user_content},
+            {"role": "assistant", "content": f"The answer is {answer_letter}) {answer_text}"}
+        ]
+
     else:
         # Try to auto-detect
         if "messages" in example:
