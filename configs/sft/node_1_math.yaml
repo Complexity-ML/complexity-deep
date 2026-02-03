@@ -18,15 +18,21 @@ training:
 
 data:
   datasets:
+    # MMLU - General knowledge benchmark (10%)
+    - name: "cais/mmlu"
+      subset: "all"
+      split: "auxiliary_train"
+      weight: 0.10
+      format: "mmlu"
     - name: "openai/gsm8k"
       subset: "main"
-      weight: 0.2
+      weight: 0.18
     - name: "AI-MO/NuminaMath-CoT"
-      weight: 0.3
+      weight: 0.27
     - name: "meta-math/MetaMathQA"
-      weight: 0.2
+      weight: 0.18
     - name: "microsoft/orca-math-word-problems-200k"
-      weight: 0.3
+      weight: 0.27
   format: "qa"
   max_samples: 500000
 

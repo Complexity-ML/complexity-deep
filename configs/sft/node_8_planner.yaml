@@ -18,16 +18,22 @@ training:
 
 data:
   datasets:
+    # MMLU - General knowledge benchmark (10%)
+    - name: "cais/mmlu"
+      subset: "all"
+      split: "auxiliary_train"
+      weight: 0.10
+      format: "mmlu"
     - name: "THUDM/AgentInstruct"
-      weight: 0.3
+      weight: 0.27
     - name: "cognitivecomputations/dolphin-coder"
-      weight: 0.2
+      weight: 0.18
     - name: "Open-Orca/OpenOrca"
-      weight: 0.2
+      weight: 0.18
     - name: "garage-bAInd/Open-Platypus"
-      weight: 0.15
+      weight: 0.14
     - name: "WizardLM/WizardLM_evol_instruct_V2_196k"
-      weight: 0.15
+      weight: 0.13
   format: "sharegpt"
   max_samples: 500000
 

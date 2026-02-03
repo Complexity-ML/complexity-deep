@@ -18,16 +18,22 @@ training:
 
 data:
   datasets:
+    # MMLU - General knowledge benchmark (10%)
+    - name: "cais/mmlu"
+      subset: "all"
+      split: "auxiliary_train"
+      weight: 0.10
+      format: "mmlu"
     - name: "THUDM/LongBench"
-      weight: 0.3
+      weight: 0.27
     - name: "narrativeqa"
-      weight: 0.2
+      weight: 0.18
     - name: "abisee/cnn_dailymail"
-      weight: 0.2
+      weight: 0.18
     - name: "multi_news"
-      weight: 0.15
+      weight: 0.14
     - name: "Samsung/samsum"
-      weight: 0.15
+      weight: 0.13
   format: "sharegpt"
   max_samples: 500000
 

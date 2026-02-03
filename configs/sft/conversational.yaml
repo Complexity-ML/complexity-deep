@@ -19,26 +19,32 @@ training:
 
 data:
   datasets:
+    # MMLU - General knowledge benchmark (10%)
+    - name: "cais/mmlu"
+      subset: "all"
+      split: "auxiliary_train"
+      weight: 0.10
+      format: "mmlu"
     # OpenAssistant - High quality multi-turn conversations
     - name: "OpenAssistant/oasst1"
-      weight: 0.3
+      weight: 0.27
       format: "oasst"
     # OpenOrca - High quality GPT-4 style conversations
     - name: "Open-Orca/OpenOrca"
-      weight: 0.25
+      weight: 0.225
       format: "alpaca"
     # Dolphin - Clean instructional data
     - name: "cognitivecomputations/dolphin"
       subset: "flan1m-alpaca-uncensored"
-      weight: 0.2
+      weight: 0.18
       format: "dolphin"
     # UltraChat - Large-scale conversations
     - name: "stingning/ultrachat"
-      weight: 0.15
+      weight: 0.135
       format: "messages"
     # Helpful/harmless conversations
     - name: "Anthropic/hh-rlhf"
-      weight: 0.1
+      weight: 0.09
       format: "hh"
   max_samples: 200000
 

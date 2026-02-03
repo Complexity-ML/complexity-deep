@@ -18,14 +18,20 @@ training:
 
 data:
   datasets:
+    # MMLU - General knowledge benchmark (10%)
+    - name: "cais/mmlu"
+      subset: "all"
+      split: "auxiliary_train"
+      weight: 0.10
+      format: "mmlu"
     - name: "gorilla-llm/APIBench"
-      weight: 0.25
+      weight: 0.225
     - name: "Salesforce/xlam-function-calling-60k"
-      weight: 0.25
+      weight: 0.225
     - name: "glaiveai/glaive-function-calling-v2"
-      weight: 0.25
+      weight: 0.225
     - name: "NousResearch/hermes-function-calling-v1"
-      weight: 0.25
+      weight: 0.225
   format: "sharegpt"
   max_samples: 500000
 

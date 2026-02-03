@@ -18,16 +18,22 @@ training:
 
 data:
   datasets:
+    # MMLU - General knowledge benchmark (10%)
+    - name: "cais/mmlu"
+      subset: "all"
+      split: "auxiliary_train"
+      weight: 0.10
+      format: "mmlu"
     - name: "Anthropic/hh-rlhf"
-      weight: 0.2
+      weight: 0.18
     - name: "nvidia/HelpSteer"
-      weight: 0.2
+      weight: 0.18
     - name: "openbmb/UltraFeedback"
-      weight: 0.25
+      weight: 0.225
     - name: "argilla/ultrafeedback-binarized-preferences"
-      weight: 0.2
+      weight: 0.18
     - name: "tatsu-lab/alpaca_eval"
-      weight: 0.15
+      weight: 0.135
   format: "sharegpt"
   max_samples: 500000
 

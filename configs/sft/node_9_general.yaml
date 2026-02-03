@@ -18,19 +18,25 @@ training:
 
 data:
   datasets:
+    # MMLU - General knowledge benchmark (10%)
+    - name: "cais/mmlu"
+      subset: "all"
+      split: "auxiliary_train"
+      weight: 0.10
+      format: "mmlu"
     # Mix of all domains
     - name: "OpenAssistant/oasst1"
-      weight: 0.2
+      weight: 0.18
     - name: "teknium/OpenHermes-2.5"
-      weight: 0.2
+      weight: 0.18
     - name: "cognitivecomputations/dolphin"
-      weight: 0.15
+      weight: 0.14
     - name: "HuggingFaceH4/ultrachat_200k"
-      weight: 0.15
+      weight: 0.13
     - name: "Open-Orca/SlimOrca"
-      weight: 0.15
+      weight: 0.14
     - name: "WizardLM/WizardLM_evol_instruct_70k"
-      weight: 0.15
+      weight: 0.13
   format: "sharegpt"
   max_samples: 500000
 

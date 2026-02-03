@@ -18,16 +18,22 @@ training:
 
 data:
   datasets:
+    # MMLU - General knowledge benchmark (10%)
+    - name: "cais/mmlu"
+      subset: "all"
+      split: "auxiliary_train"
+      weight: 0.10
+      format: "mmlu"
     - name: "euclaise/writingprompts"
-      weight: 0.25
+      weight: 0.225
     - name: "qwedsacf/grade-school-math-instructions"
-      weight: 0.1
+      weight: 0.09
     - name: "teknium/OpenHermes-2.5"
-      weight: 0.25
+      weight: 0.225
     - name: "Open-Orca/SlimOrca"
-      weight: 0.2
+      weight: 0.18
     - name: "HuggingFaceH4/ultrachat_200k"
-      weight: 0.2
+      weight: 0.18
   format: "sharegpt"
   max_samples: 500000
 
