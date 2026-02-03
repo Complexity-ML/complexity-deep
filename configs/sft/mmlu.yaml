@@ -20,36 +20,36 @@ training:
 data:
   split: "train"  # Default split for most datasets
   datasets:
-    # MMLU auxiliary train - 99k examples (boosted weight for grokking hunt)
+    # MMLU auxiliary train - 99k examples
     - name: "cais/mmlu"
       subset: "all"
       split: "auxiliary_train"  # MMLU uses this split name
-      weight: 0.50
+      weight: 0.40
       format: "mmlu"
     # SciQ - Science questions
     - name: "allenai/sciq"
-      weight: 0.12
+      weight: 0.15
       format: "sciq"
     # ARC - Reasoning challenges
     - name: "allenai/ai2_arc"
       subset: "ARC-Challenge"
       split: "train"
-      weight: 0.08
+      weight: 0.10
       format: "arc"
     - name: "allenai/ai2_arc"
       subset: "ARC-Easy"
       split: "train"
-      weight: 0.08
+      weight: 0.10
       format: "arc"
     # OpenBookQA
     - name: "allenai/openbookqa"
       split: "train"
-      weight: 0.10
+      weight: 0.12
       format: "openbookqa"
     # HellaSwag - Sentence completion (added for transfer learning)
     - name: "Rowan/hellaswag"
       split: "train"
-      weight: 0.12
+      weight: 0.13
       format: "hellaswag"
   max_samples: 150000
 
