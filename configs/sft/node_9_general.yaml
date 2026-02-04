@@ -7,8 +7,8 @@ model:
   output: "./checkpoints-conv-sft-general"
 
 training:
-  epochs: 3
-  batch_size: 1
+  epochs: 15
+  batch_size: 8
   gradient_accumulation: 64
   learning_rate: 2e-5
   weight_decay: 0.01
@@ -28,17 +28,23 @@ data:
     # Mix of all domains
     - name: "OpenAssistant/oasst1"
       weight: 0.18
+      format: "oasst"
     - name: "teknium/OpenHermes-2.5"
       weight: 0.18
+      format: "sharegpt"
     - name: "cognitivecomputations/dolphin"
       subset: "flan1m-alpaca-uncensored"
       weight: 0.14
+      format: "alpaca"
     - name: "HuggingFaceH4/ultrachat_200k"
       weight: 0.13
+      format: "ultrachat"
     - name: "Open-Orca/SlimOrca"
       weight: 0.14
+      format: "sharegpt"
     - name: "WizardLM/WizardLM_evol_instruct_70k"
       weight: 0.13
+      format: "alpaca"
   format: "sharegpt"
   max_samples: 500000
 
