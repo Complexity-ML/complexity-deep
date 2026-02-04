@@ -37,6 +37,7 @@ data:
       weight: 0.14
       format: "alpaca"
     - name: "HuggingFaceH4/ultrachat_200k"
+      split: "train_sft"
       weight: 0.13
       format: "ultrachat"
     - name: "Open-Orca/SlimOrca"
