@@ -3,6 +3,7 @@
 
 model:
   checkpoint: "./checkpoints-conv-sft/checkpoint_epoch11.pt"
+  tokenizer: "./checkpoints-conv-sft"
   output: "./checkpoints-conv-sft-general"
 
 training:
