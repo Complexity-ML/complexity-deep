@@ -2,8 +2,8 @@
 # Focus: Orchestration, routing, fallback
 
 model:
-  checkpoint: "./checkpoints/final.pt"
-  output: "./checkpoints/pacific-prime-general"
+  checkpoint: "./checkpoints-conv-sft/checkpoint_epoch11.pt"
+  output: "./checkpoints-conv-sft-general"
 
 training:
   epochs: 3
