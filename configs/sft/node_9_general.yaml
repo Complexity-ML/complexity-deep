@@ -31,6 +31,7 @@ data:
     - name: "teknium/OpenHermes-2.5"
       weight: 0.18
     - name: "cognitivecomputations/dolphin"
+      subset: "flan1m-alpaca-uncensored"
       weight: 0.14
     - name: "HuggingFaceH4/ultrachat_200k"
       weight: 0.13
