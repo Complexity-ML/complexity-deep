@@ -2,7 +2,7 @@
 # 10 epochs, focused training on MMLU auxiliary_train only
 
 model:
-  checkpoint: "./checkpoints-conv-sft/checkpoint_epoch6.pt"
+  checkpoint: "./checkpoints-conv-sft/checkpoint_epoch76.pt"
   tokenizer: "./checkpoints-conv-sft"
   output: "./checkpoints-mmlu-pure"
 
