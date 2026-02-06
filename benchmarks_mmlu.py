@@ -140,9 +140,6 @@ def main():
     logging.info("=" * 60)
     logging.info(f"Overall: {overall_acc:.2f}% ({correct}/{total})")
     logging.info("")
-    logging.info("Per-subject breakdown:")
-    for subject, stats in sorted(subject_results.items(), key=lambda x: x[1]["accuracy"], reverse=True):
-        logging.info(f"  {subject:40s}: {stats['accuracy']:6.2f}% ({stats['correct']}/{stats['total']})")
     logging.info("=" * 60)
 
     # Save
