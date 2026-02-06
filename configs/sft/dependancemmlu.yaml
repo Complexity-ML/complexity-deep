@@ -7,8 +7,8 @@ model:
   output: "./checkpoints-mmlu-pure"
 
 training:
-  epochs: 10
-  batch_size: 16
+  epochs: 30
+  batch_size: 8
   gradient_accumulation: 4
   learning_rate: 1e-5
   weight_decay: 0.01
