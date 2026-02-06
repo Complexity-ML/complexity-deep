@@ -26,14 +26,17 @@ from run_benchmarks import load_model, load_tokenizer, get_logprobs
 
 
 @torch.no_grad()
-def run_mmlu_full(model, tokenizer, device: str = "cuda"):
-    """Run MMLU on 100% of the test set with per-subject breakdown."""
+def run_mmlu_full(model, tokenizer, device: str = "cuda", max_samples: int = None):
+    """Run MMLU on the test set with per-subject breakdown."""
 
     logging.info("Loading MMLU test set (all subjects)...")
     try:
         dataset = load_dataset("cais/mmlu", "all", split="test", trust_remote_code=True)
     except:
         dataset = load_dataset("lukaemon/mmlu", "all", split="test", trust_remote_code=True)
+
+    if max_samples and len(dataset) > max_samples:
+        dataset = dataset.shuffle(seed=42).select(range(max_samples))
 
     logging.info(f"Total MMLU test samples: {len(dataset)}")
 
@@ -93,6 +96,8 @@ def main():
     parser.add_argument("--config", type=str, default=None)
     parser.add_argument("--tokenizer", type=str, default=None)
     parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument("--max-samples", type=int, default=None,
+                        help="Limit number of samples (default: all)")
     parser.add_argument("--output", type=str, default="mmlu_full_results.json")
 
     args = parser.parse_args()
@@ -126,7 +131,7 @@ def main():
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    overall_acc, subject_results, correct, total = run_mmlu_full(model, tokenizer, args.device)
+    overall_acc, subject_results, correct, total = run_mmlu_full(model, tokenizer, args.device, args.max_samples)
 
     # Summary
     logging.info("")
