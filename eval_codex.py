@@ -33,7 +33,7 @@ PROMPTS = [
     "Write a Python function that solves the N-Queens problem using backtracking.",
 ]
 
-CHAT_TEMPLATE = "<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
+CHAT_TEMPLATE = "User: {prompt}\n\nAssistant:"
 
 
 def load_specific_checkpoint(ckpt_dir, ckpt_file, tokenizer_dir=None, device=None):
@@ -187,8 +187,7 @@ def main():
             )
 
             # Extract assistant response
-            response = output.split("<|im_start|>assistant\n")[-1]
-            response = response.replace("<|im_end|>", "").strip()
+            response = output.split("Assistant:")[-1].strip()
             print(response[:500])
 
             rows.append({
