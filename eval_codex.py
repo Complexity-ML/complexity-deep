@@ -9,9 +9,12 @@ Usage:
 
 import argparse
 import csv
-import os
+import json
+import torch
 from pathlib import Path
-from generate import load_model, generate
+from safetensors.torch import load_file
+from tokenizers import Tokenizer
+from complexity_deep import DeepForCausalLM, DeepConfig
 
 PROMPTS = [
     # Level 1 - Basic
@@ -30,15 +33,83 @@ PROMPTS = [
     "Write a Python function that solves the N-Queens problem using backtracking.",
 ]
 
+CHAT_TEMPLATE = "<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
 
-def get_epoch_from_checkpoint(ckpt_path):
-    """Extract epoch number from checkpoint filename."""
-    for f in sorted(Path(ckpt_path).glob("checkpoint_epoch*.pt")):
-        name = f.stem
-        if "epoch" in name:
-            yield int(name.split("epoch")[1]), f
-    for f in sorted(Path(ckpt_path).glob("step_*.pt")):
-        yield int(f.stem.split("_")[1]), f
+
+def load_specific_checkpoint(ckpt_dir, ckpt_file, device=None):
+    """Load model from a specific checkpoint file."""
+    ckpt_dir = Path(ckpt_dir)
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    with open(ckpt_dir / "config.json", "r") as f:
+        cfg = json.load(f)
+
+    config = DeepConfig(
+        vocab_size=cfg["vocab_size"],
+        hidden_size=cfg["hidden_size"],
+        intermediate_size=cfg["intermediate_size"],
+        num_hidden_layers=cfg["num_hidden_layers"],
+        num_attention_heads=cfg["num_attention_heads"],
+        num_key_value_heads=cfg["num_key_value_heads"],
+        max_position_embeddings=cfg["max_position_embeddings"],
+        rope_theta=cfg["rope_theta"],
+        rms_norm_eps=cfg["rms_norm_eps"],
+        attention_dropout=cfg["attention_dropout"],
+        hidden_act=cfg["hidden_act"],
+        tie_word_embeddings=cfg["tie_word_embeddings"],
+        use_token_routed_mlp=cfg.get("use_token_routed_mlp", True),
+        num_experts=cfg.get("num_experts", 4),
+        use_qk_norm=cfg.get("use_qk_norm", True),
+        use_sdpa=cfg.get("use_sdpa", True),
+    )
+
+    model = DeepForCausalLM(config)
+
+    ckpt = torch.load(ckpt_file, map_location="cpu", weights_only=False)
+    if "model" in ckpt and isinstance(ckpt["model"], dict):
+        state_dict = ckpt["model"]
+    else:
+        state_dict = ckpt
+
+    missing, unexpected = model.load_state_dict(state_dict, strict=False)
+    if len(unexpected) == len(state_dict):
+        stripped = {k.removeprefix("model."): v for k, v in state_dict.items()}
+        model.load_state_dict(stripped, strict=False)
+
+    model.eval()
+    model = model.to(device)
+
+    tokenizer = Tokenizer.from_file(str(ckpt_dir / "tokenizer.json"))
+    return model, tokenizer, config, device
+
+
+@torch.no_grad()
+def generate(model, tokenizer, prompt, max_tokens=300, temperature=0.3,
+             top_k=50, top_p=0.9, device="cpu"):
+    """Generate text from a prompt."""
+    input_ids = torch.tensor([tokenizer.encode(prompt).ids], dtype=torch.long).to(device)
+    generated_ids = input_ids.clone()
+
+    for _ in range(max_tokens):
+        outputs = model(generated_ids)
+        next_logits = outputs.logits[0, -1, :].float()
+
+        if temperature > 0:
+            next_logits = next_logits / temperature
+
+        if top_k > 0:
+            indices_to_remove = next_logits < torch.topk(next_logits, top_k)[0][..., -1, None]
+            next_logits[indices_to_remove] = float("-inf")
+
+        probs = torch.softmax(next_logits, dim=-1)
+        next_token = torch.multinomial(probs, num_samples=1)
+        generated_ids = torch.cat([generated_ids, next_token.unsqueeze(0)], dim=1)
+
+        if next_token.item() == 0:
+            break
+
+    return tokenizer.decode(generated_ids[0].tolist())
 
 
 def main():
@@ -50,7 +121,8 @@ def main():
     args = parser.parse_args()
 
     ckpt_dir = Path(args.checkpoint)
-    checkpoints = list(get_epoch_from_checkpoint(ckpt_dir))
+    checkpoints = sorted(ckpt_dir.glob("checkpoint_epoch*.pt"),
+                         key=lambda f: int(f.stem.split("epoch")[1]))
 
     if not checkpoints:
         print(f"No checkpoints found in {ckpt_dir}")
@@ -61,28 +133,30 @@ def main():
 
     rows = []
 
-    for epoch_num, ckpt_file in checkpoints:
+    for ckpt_file in checkpoints:
+        epoch_num = int(ckpt_file.stem.split("epoch")[1])
         print(f"\n{'='*60}")
-        print(f"EPOCH {epoch_num}")
+        print(f"EPOCH {epoch_num} - {ckpt_file.name}")
         print(f"{'='*60}")
 
-        # Temporarily copy checkpoint as the "latest" for load_model
-        model, tokenizer, config, device = load_model(str(ckpt_dir))
+        model, tokenizer, config, device = load_specific_checkpoint(ckpt_dir, ckpt_file)
 
         for i, prompt in enumerate(PROMPTS):
+            formatted = CHAT_TEMPLATE.format(prompt=prompt)
             print(f"\n--- Prompt {i+1}/{len(PROMPTS)} ---")
             print(f">>> {prompt}\n")
 
             output = generate(
-                model, tokenizer, prompt,
+                model, tokenizer, formatted,
                 max_tokens=args.max_tokens,
                 temperature=args.temperature,
                 device=device,
-                stream=True,
             )
 
-            # Remove prompt from output
-            response = output[len(prompt):].strip()
+            # Extract assistant response
+            response = output.split("<|im_start|>assistant\n")[-1]
+            response = response.replace("<|im_end|>", "").strip()
+            print(response[:500])
 
             rows.append({
                 "epoch": epoch_num,
@@ -92,12 +166,9 @@ def main():
                 "response_len": len(response),
             })
 
-        # Free memory
         del model
-        import torch
         torch.cuda.empty_cache() if torch.cuda.is_available() else None
 
-    # Save CSV
     with open(args.output, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=["epoch", "prompt_id", "prompt", "response", "response_len"])
         writer.writeheader()
