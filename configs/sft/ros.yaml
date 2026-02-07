@@ -9,7 +9,7 @@ model:
 training:
   epochs: 30
   batch_size: 2
-  gradient_accumulation: 64
+  gradient_accumulation: 32
   learning_rate: 2e-5
   weight_decay: 0.01
   max_length: 4096
