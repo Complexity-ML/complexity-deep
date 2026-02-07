@@ -21,17 +21,13 @@ data:
   datasets:
     # ROS2 Q&A - Nav2, MoveIt2, URDF, launch files, Gazebo (1.8k)
     - name: "ashwin-4000/ros_instruct_dataset"
-      weight: 0.40
+      weight: 0.50
       format: "alpaca"
     # ROS2 instruction-output - DDS, QoS, CMake, Python/C++ client libs (2k)
     - name: "1312354o/llama-ros2"
-      weight: 0.40
+      weight: 0.50
       format: "alpaca"
-    # Robotics StackExchange - filtrer pour ROS2 content (39k)
-    - name: "bshada/robotics.stackexchange.com"
-      weight: 0.20
-      format: "sharegpt"
-  max_samples: 50000
+  max_samples: 4000
 
 specialization:
   name: "ros2"
