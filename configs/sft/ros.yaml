@@ -2,7 +2,7 @@
 # Focus: ROS2 nodes, launch files, URDF, Nav2, MoveIt2, Gazebo, DDS
 
 model:
-  checkpoint: "./checkpoints/pacific-prime-code/checkpoint_epoch3.pt"
+  checkpoint: "./checkpoints/pacific-prime-ros2/checkpoint_epoch4.pt"
   tokenizer: "./checkpoints"
   output: "./checkpoints/pacific-prime-ros2"
 
