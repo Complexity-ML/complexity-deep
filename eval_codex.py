@@ -67,17 +67,26 @@ def load_specific_checkpoint(ckpt_dir, ckpt_file, tokenizer_dir=None, device=Non
 
     model = DeepForCausalLM(config)
 
+    print(f"Loading {ckpt_file}...")
     ckpt = torch.load(ckpt_file, map_location="cpu", weights_only=False)
     if "model" in ckpt and isinstance(ckpt["model"], dict):
         state_dict = ckpt["model"]
+        print(f"  Found 'model' key, {len(state_dict)} tensors")
     else:
         state_dict = ckpt
+        print(f"  Flat checkpoint, {len(state_dict)} keys")
+        print(f"  First 3 keys: {list(state_dict.keys())[:3]}")
 
     missing, unexpected = model.load_state_dict(state_dict, strict=False)
+    print(f"  Load attempt 1: {len(missing)} missing, {len(unexpected)} unexpected")
+
     if len(unexpected) == len(state_dict):
         stripped = {k.removeprefix("model."): v for k, v in state_dict.items()}
-        model.load_state_dict(stripped, strict=False)
+        missing2, unexpected2 = model.load_state_dict(stripped, strict=False)
+        print(f"  Load attempt 2 (stripped): {len(missing2)} missing, {len(unexpected2)} unexpected")
 
+    params = sum(p.numel() for p in model.parameters())
+    print(f"  Model: {params:,} parameters")
     model.eval()
     model = model.to(device)
 
