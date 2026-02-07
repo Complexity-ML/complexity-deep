@@ -2,12 +2,12 @@
 # Focus: Code generation, debugging, refactoring
 
 model:
-  checkpoint: "./checkpoints/final.pt"
+  checkpoint: "./checkpoints-conv-sft/checkpoint_epoch20.pt"
   tokenizer: "./checkpoints"
   output: "./checkpoints/pacific-prime-code"
 
 training:
-  epochs: 3
+  epochs: 10
   batch_size: 1
   gradient_accumulation: 64
   learning_rate: 2e-5
