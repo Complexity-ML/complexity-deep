@@ -819,7 +819,7 @@ def main():
     parser.add_argument("--token", type=str, default=None, help="HF token")
 
     # Chat template
-    parser.add_argument("--template", type=str, default="default",
+    parser.add_argument("--template", type=str, default=None,
                        choices=list(CHAT_TEMPLATES.keys()),
                        help="Chat template name")
     parser.add_argument("--custom-template", type=str, default=None,
@@ -843,7 +843,7 @@ def main():
     parser.add_argument("--num-workers", type=int, default=4, help="DataLoader workers")
 
     # Output
-    parser.add_argument("--output", type=str, default="./checkpoints-conv-sft", help="Output dir")
+    parser.add_argument("--output", type=str, default=None, help="Output dir")
     parser.add_argument("--save-every", type=int, default=1, help="Save every N epochs")
 
     # Validation
@@ -900,6 +900,12 @@ def main():
         # Handle datasets from config
         if 'data' in config and 'datasets' in config['data'] and not args.dataset and not args.datasets_json:
             args.datasets_json = json.dumps(config['data']['datasets'])
+
+    # Apply defaults for args not set by CLI or config
+    if args.output is None:
+        args.output = "./checkpoints-conv-sft"
+    if args.template is None:
+        args.template = "default"
 
     # Validate required args
     if not args.checkpoint:
