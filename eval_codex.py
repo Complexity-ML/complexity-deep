@@ -137,6 +137,7 @@ def main():
     parser.add_argument("--output", "-o", default="codex_results.csv", help="Output CSV")
     parser.add_argument("--max_tokens", type=int, default=512, help="Max tokens per generation")
     parser.add_argument("--temperature", type=float, default=0.7, help="Sampling temperature")
+    parser.add_argument("--latest", action="store_true", help="Only test the latest checkpoint")
     args = parser.parse_args()
 
     ckpt_dir = Path(args.checkpoint)
@@ -148,7 +149,10 @@ def main():
         print(f"No checkpoints found in {ckpt_dir}")
         return
 
-    print(f"Found {len(checkpoints)} checkpoints")
+    if args.latest:
+        checkpoints = [checkpoints[-1]]
+
+    print(f"Testing {len(checkpoints)} checkpoint(s)")
     print(f"Running {len(PROMPTS)} prompts per checkpoint\n")
 
     rows = []
