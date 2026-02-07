@@ -117,7 +117,7 @@ def main():
     parser.add_argument("--checkpoint", "-c", required=True, help="Checkpoint directory")
     parser.add_argument("--output", "-o", default="codex_results.csv", help="Output CSV")
     parser.add_argument("--max_tokens", type=int, default=300, help="Max tokens per generation")
-    parser.add_argument("--temperature", type=float, default=0.3, help="Low temp for reproducibility")
+    parser.add_argument("--temperature", type=float, default=0.7, help="Sampling temperature")
     args = parser.parse_args()
 
     ckpt_dir = Path(args.checkpoint)
