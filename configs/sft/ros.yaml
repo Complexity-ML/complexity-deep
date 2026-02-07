@@ -1,0 +1,58 @@
+# Node ROS: Robotics / ROS2 Specialist
+# Focus: ROS2 nodes, launch files, URDF, navigation, MoveIt, Gazebo
+
+model:
+  checkpoint: "./checkpoints-conv-sft/checkpoint_epoch20.pt"
+  tokenizer: "./checkpoints"
+  output: "./checkpoints/pacific-prime-ros"
+
+training:
+  epochs: 30
+  batch_size: 1
+  gradient_accumulation: 64
+  learning_rate: 2e-5
+  weight_decay: 0.01
+  max_length: 4096
+  warmup_ratio: 0.03
+  gradient_checkpointing: true
+  bf16: false
+
+data:
+  datasets:
+    # ROS2 Q&A - Nav2, MoveIt2, URDF, launch files, Gazebo (1.8k)
+    - name: "ashwin-4000/ros_instruct_dataset"
+      weight: 0.25
+      format: "alpaca"
+    # ROS2 instruction-output - DDS, QoS, CMake, client libs (2k)
+    - name: "1312354o/llama-ros2"
+      weight: 0.25
+      format: "alpaca"
+    # General robotics instructions - PID, SLAM, sensors, control (96k)
+    - name: "mlfoundations-dev/robotics_1000000_samples"
+      weight: 0.20
+      format: "alpaca"
+    # Robotics StackExchange Q&A - ROS, SLAM, sensors, control (39k)
+    - name: "bshada/robotics.stackexchange.com"
+      weight: 0.20
+      format: "sharegpt"
+    # Robot function calling - move_tcp, move_joint (1k)
+    - name: "milistu/robot-instructions"
+      weight: 0.10
+      format: "alpaca"
+  max_samples: 140000
+
+specialization:
+  name: "ros"
+  skills:
+    - ros2_nodes
+    - launch_files
+    - urdf
+    - navigation
+    - moveit
+    - gazebo
+    - slam
+    - pid_control
+    - sensor_integration
+    - tf2_transforms
+    - colcon_build
+    - cmake
