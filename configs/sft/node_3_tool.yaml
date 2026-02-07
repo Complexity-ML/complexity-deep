@@ -3,6 +3,7 @@
 
 model:
   checkpoint: "./checkpoints/final.pt"
+  tokenizer: "./checkpoints"
   output: "./checkpoints/pacific-prime-tool"
 
 training:
@@ -18,20 +19,14 @@ training:
 
 data:
   datasets:
-    # MMLU - General knowledge benchmark (5% - conservateur pour spécialiste)
-    - name: "cais/mmlu"
-      subset: "all"
-      split: "auxiliary_train"
-      weight: 0.05
-      format: "mmlu"
     - name: "gorilla-llm/APIBench"
-      weight: 0.2375
+      weight: 0.25
     - name: "Salesforce/xlam-function-calling-60k"
-      weight: 0.2375
+      weight: 0.25
     - name: "glaiveai/glaive-function-calling-v2"
-      weight: 0.2375
+      weight: 0.25
     - name: "NousResearch/hermes-function-calling-v1"
-      weight: 0.2375
+      weight: 0.25
   format: "sharegpt"
   max_samples: 500000
 

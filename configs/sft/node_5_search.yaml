@@ -3,6 +3,7 @@
 
 model:
   checkpoint: "./checkpoints/final.pt"
+  tokenizer: "./checkpoints"
   output: "./checkpoints/pacific-prime-search"
 
 training:
@@ -18,23 +19,17 @@ training:
 
 data:
   datasets:
-    # MMLU - General knowledge benchmark (10%)
-    - name: "cais/mmlu"
-      subset: "all"
-      split: "auxiliary_train"
-      weight: 0.10
-      format: "mmlu"
     - name: "ms_marco"
       subset: "v2.1"
-      weight: 0.27
+      weight: 0.30
     - name: "natural_questions"
-      weight: 0.18
+      weight: 0.20
     - name: "hotpot_qa"
-      weight: 0.18
+      weight: 0.20
     - name: "trivia_qa"
-      weight: 0.14
+      weight: 0.16
     - name: "squad_v2"
-      weight: 0.13
+      weight: 0.14
   format: "sharegpt"
   max_samples: 500000
 

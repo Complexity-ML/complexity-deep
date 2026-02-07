@@ -3,6 +3,7 @@
 
 model:
   checkpoint: "./checkpoints/final.pt"
+  tokenizer: "./checkpoints"
   output: "./checkpoints/pacific-prime-planner"
 
 training:
@@ -18,22 +19,16 @@ training:
 
 data:
   datasets:
-    # MMLU - General knowledge benchmark (10%)
-    - name: "cais/mmlu"
-      subset: "all"
-      split: "auxiliary_train"
-      weight: 0.10
-      format: "mmlu"
     - name: "THUDM/AgentInstruct"
-      weight: 0.27
+      weight: 0.30
     - name: "cognitivecomputations/dolphin-coder"
-      weight: 0.18
+      weight: 0.20
     - name: "Open-Orca/OpenOrca"
-      weight: 0.18
+      weight: 0.20
     - name: "garage-bAInd/Open-Platypus"
-      weight: 0.14
+      weight: 0.16
     - name: "WizardLM/WizardLM_evol_instruct_V2_196k"
-      weight: 0.13
+      weight: 0.14
   format: "sharegpt"
   max_samples: 500000
 

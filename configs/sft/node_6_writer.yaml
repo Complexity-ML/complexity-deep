@@ -3,6 +3,7 @@
 
 model:
   checkpoint: "./checkpoints/final.pt"
+  tokenizer: "./checkpoints"
   output: "./checkpoints/pacific-prime-writer"
 
 training:
@@ -18,22 +19,16 @@ training:
 
 data:
   datasets:
-    # MMLU - General knowledge benchmark (10%)
-    - name: "cais/mmlu"
-      subset: "all"
-      split: "auxiliary_train"
-      weight: 0.10
-      format: "mmlu"
     - name: "euclaise/writingprompts"
-      weight: 0.225
+      weight: 0.25
     - name: "qwedsacf/grade-school-math-instructions"
-      weight: 0.09
+      weight: 0.10
     - name: "teknium/OpenHermes-2.5"
-      weight: 0.225
+      weight: 0.25
     - name: "Open-Orca/SlimOrca"
-      weight: 0.18
+      weight: 0.20
     - name: "HuggingFaceH4/ultrachat_200k"
-      weight: 0.18
+      weight: 0.20
   format: "sharegpt"
   max_samples: 500000
 

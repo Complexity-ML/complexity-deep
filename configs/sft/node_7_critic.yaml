@@ -3,6 +3,7 @@
 
 model:
   checkpoint: "./checkpoints/final.pt"
+  tokenizer: "./checkpoints"
   output: "./checkpoints/pacific-prime-critic"
 
 training:
@@ -18,22 +19,16 @@ training:
 
 data:
   datasets:
-    # MMLU - General knowledge benchmark (10%)
-    - name: "cais/mmlu"
-      subset: "all"
-      split: "auxiliary_train"
-      weight: 0.10
-      format: "mmlu"
     - name: "Anthropic/hh-rlhf"
-      weight: 0.18
+      weight: 0.20
     - name: "nvidia/HelpSteer"
-      weight: 0.18
+      weight: 0.20
     - name: "openbmb/UltraFeedback"
-      weight: 0.225
+      weight: 0.25
     - name: "argilla/ultrafeedback-binarized-preferences"
-      weight: 0.18
+      weight: 0.20
     - name: "tatsu-lab/alpaca_eval"
-      weight: 0.135
+      weight: 0.15
   format: "sharegpt"
   max_samples: 500000
 

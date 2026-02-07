@@ -3,6 +3,7 @@
 
 model:
   checkpoint: "./checkpoints/final.pt"
+  tokenizer: "./checkpoints"
   output: "./checkpoints/pacific-prime-reason"
 
 training:
@@ -18,24 +19,18 @@ training:
 
 data:
   datasets:
-    # MMLU - General knowledge benchmark (10%)
-    - name: "cais/mmlu"
-      subset: "all"
-      split: "auxiliary_train"
-      weight: 0.10
-      format: "mmlu"
     - name: "allenai/ai2_arc"
       subset: "ARC-Challenge"
-      weight: 0.18
+      weight: 0.20
     - name: "Rowan/hellaswag"
-      weight: 0.14
+      weight: 0.16
     - name: "tasksource/bigbench"
       subset: "logical_deduction"
-      weight: 0.18
+      weight: 0.20
     - name: "kaist-ai/CoT-Collection"
-      weight: 0.27
+      weight: 0.30
     - name: "akjindal53244/Camel-AI-Physics"
-      weight: 0.13
+      weight: 0.14
   format: "sharegpt"
   max_samples: 500000
 
