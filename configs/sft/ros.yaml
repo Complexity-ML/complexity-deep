@@ -2,14 +2,14 @@
 # Focus: ROS2 nodes, launch files, URDF, Nav2, MoveIt2, Gazebo, DDS
 
 model:
-  checkpoint: "./checkpoints/pacific-prime-ros2/checkpoint_epoch4.pt"
+  checkpoint: "./checkpoints/pacific-prime-ros2/checkpoint_epoch7.pt"
   tokenizer: "./checkpoints"
   output: "./checkpoints/pacific-prime-ros2"
 
 training:
   epochs: 300
-  batch_size: 8
-  gradient_accumulation: 8
+  batch_size: 16
+  gradient_accumulation: 4
   learning_rate: 2e-5
   weight_decay: 0.01
   max_length: 4096
