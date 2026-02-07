@@ -60,7 +60,13 @@ specialization:
     - javascript
     - typescript
     - rust
+    - java
+    - cpp
+    - go
+    - sql
+    - algorithms
     - debugging
     - refactoring
     - code_review
+    - unit_testing
     - documentation
