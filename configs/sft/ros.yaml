@@ -1,10 +1,10 @@
-# Node ROS: Robotics / ROS2 Specialist
-# Focus: ROS2 nodes, launch files, URDF, navigation, MoveIt, Gazebo
+# Node ROS2: Robot Operating System 2 Specialist
+# Focus: ROS2 nodes, launch files, URDF, Nav2, MoveIt2, Gazebo, DDS
 
 model:
   checkpoint: "./checkpoints-conv-sft/checkpoint_epoch20.pt"
   tokenizer: "./checkpoints"
-  output: "./checkpoints/pacific-prime-ros"
+  output: "./checkpoints/pacific-prime-ros2"
 
 training:
   epochs: 30
@@ -21,38 +21,30 @@ data:
   datasets:
     # ROS2 Q&A - Nav2, MoveIt2, URDF, launch files, Gazebo (1.8k)
     - name: "ashwin-4000/ros_instruct_dataset"
-      weight: 0.25
+      weight: 0.40
       format: "alpaca"
-    # ROS2 instruction-output - DDS, QoS, CMake, client libs (2k)
+    # ROS2 instruction-output - DDS, QoS, CMake, Python/C++ client libs (2k)
     - name: "1312354o/llama-ros2"
-      weight: 0.25
+      weight: 0.40
       format: "alpaca"
-    # General robotics instructions - PID, SLAM, sensors, control (96k)
-    - name: "mlfoundations-dev/robotics_1000000_samples"
-      weight: 0.20
-      format: "alpaca"
-    # Robotics StackExchange Q&A - ROS, SLAM, sensors, control (39k)
+    # Robotics StackExchange - filtrer pour ROS2 content (39k)
     - name: "bshada/robotics.stackexchange.com"
       weight: 0.20
       format: "sharegpt"
-    # Robot function calling - move_tcp, move_joint (1k)
-    - name: "milistu/robot-instructions"
-      weight: 0.10
-      format: "alpaca"
-  max_samples: 140000
+  max_samples: 50000
 
 specialization:
-  name: "ros"
+  name: "ros2"
   skills:
     - ros2_nodes
     - launch_files
     - urdf
-    - navigation
-    - moveit
+    - nav2
+    - moveit2
     - gazebo
-    - slam
-    - pid_control
-    - sensor_integration
+    - dds_qos
     - tf2_transforms
     - colcon_build
     - cmake
+    - rclpy
+    - rclcpp
