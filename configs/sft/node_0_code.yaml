@@ -2,12 +2,12 @@
 # Focus: Code generation, debugging, refactoring
 
 model:
-  checkpoint: "./checkpoints-conv-sft/checkpoint_epoch20.pt"
+  checkpoint: "./checkpoints/pacific-prime-code/checkpoint_epoch3.pt"
   tokenizer: "./checkpoints"
   output: "./checkpoints/pacific-prime-code"
 
 training:
-  epochs: 10
+  epochs: 20
   batch_size: 1
   gradient_accumulation: 64
   learning_rate: 2e-5
@@ -21,25 +21,37 @@ data:
   datasets:
     # Evolved code instructions (80k) - high quality multi-step
     - name: "nickrosh/Evol-Instruct-Code-80k-v1"
-      weight: 0.25
+      weight: 0.20
       format: "alpaca"
     # Code feedback with corrections (66k) - instruction + refinement
     - name: "m-a-p/CodeFeedback-Filtered-Instruction"
-      weight: 0.25
+      weight: 0.15
       format: "sharegpt"
     # CodeAlpaca - clean instruction/response pairs (20k)
     - name: "sahil2801/CodeAlpaca-20k"
-      weight: 0.15
+      weight: 0.10
       format: "alpaca"
     # Python specific instructions (18k)
     - name: "iamtarun/python_code_instructions_18k_alpaca"
-      weight: 0.15
+      weight: 0.10
       format: "alpaca"
     # Code contests as instruction format
     - name: "BAAI/TACO"
-      weight: 0.20
+      weight: 0.15
       format: "sharegpt"
-  max_samples: 200000
+    # Magicoder - high quality OSS code instructions (75k)
+    - name: "ise-uiuc/Magicoder-OSS-Instruct-75K"
+      weight: 0.15
+      format: "sharegpt"
+    # Self-instruct code with execution feedback (11k)
+    - name: "codeparrot/self-instruct-starcoder"
+      weight: 0.05
+      format: "alpaca"
+    # Multi-language code instructions
+    - name: "theblackcat102/evol-codealpaca-v1"
+      weight: 0.10
+      format: "alpaca"
+  max_samples: 500000
 
 specialization:
   name: "code"
