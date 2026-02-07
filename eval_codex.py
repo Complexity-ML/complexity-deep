@@ -36,13 +36,14 @@ PROMPTS = [
 CHAT_TEMPLATE = "<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n"
 
 
-def load_specific_checkpoint(ckpt_dir, ckpt_file, device=None):
+def load_specific_checkpoint(ckpt_dir, ckpt_file, tokenizer_dir=None, device=None):
     """Load model from a specific checkpoint file."""
     ckpt_dir = Path(ckpt_dir)
+    tokenizer_dir = Path(tokenizer_dir) if tokenizer_dir else ckpt_dir
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    with open(ckpt_dir / "config.json", "r") as f:
+    with open(tokenizer_dir / "config.json", "r") as f:
         cfg = json.load(f)
 
     config = DeepConfig(
@@ -80,31 +81,48 @@ def load_specific_checkpoint(ckpt_dir, ckpt_file, device=None):
     model.eval()
     model = model.to(device)
 
-    tokenizer = Tokenizer.from_file(str(ckpt_dir / "tokenizer.json"))
+    tokenizer = Tokenizer.from_file(str(tokenizer_dir / "tokenizer.json"))
     return model, tokenizer, config, device
 
 
 @torch.no_grad()
-def generate(model, tokenizer, prompt, max_tokens=300, temperature=0.3,
-             top_k=50, top_p=0.9, device="cpu"):
+def generate(model, tokenizer, prompt, max_tokens=300, temperature=0.7,
+             top_k=50, top_p=0.9, repetition_penalty=1.2, device="cpu"):
     """Generate text from a prompt."""
     input_ids = torch.tensor([tokenizer.encode(prompt).ids], dtype=torch.long).to(device)
     generated_ids = input_ids.clone()
+    generated_set = set(input_ids[0].tolist())
 
     for _ in range(max_tokens):
         outputs = model(generated_ids)
         next_logits = outputs.logits[0, -1, :].float()
 
+        # Repetition penalty
+        for token_id in generated_set:
+            next_logits[token_id] /= repetition_penalty
+
         if temperature > 0:
             next_logits = next_logits / temperature
 
+        # Top-k
         if top_k > 0:
             indices_to_remove = next_logits < torch.topk(next_logits, top_k)[0][..., -1, None]
+            next_logits[indices_to_remove] = float("-inf")
+
+        # Top-p
+        if top_p < 1.0:
+            sorted_logits, sorted_indices = torch.sort(next_logits, descending=True)
+            cumulative_probs = torch.cumsum(torch.softmax(sorted_logits, dim=-1), dim=-1)
+            sorted_indices_to_remove = cumulative_probs > top_p
+            sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+            sorted_indices_to_remove[..., 0] = 0
+            indices_to_remove = sorted_indices[sorted_indices_to_remove]
             next_logits[indices_to_remove] = float("-inf")
 
         probs = torch.softmax(next_logits, dim=-1)
         next_token = torch.multinomial(probs, num_samples=1)
         generated_ids = torch.cat([generated_ids, next_token.unsqueeze(0)], dim=1)
+        generated_set.add(next_token.item())
 
         if next_token.item() == 0:
             break
@@ -115,12 +133,14 @@ def generate(model, tokenizer, prompt, max_tokens=300, temperature=0.3,
 def main():
     parser = argparse.ArgumentParser(description="Eval Codex - epoch diff tracker")
     parser.add_argument("--checkpoint", "-c", required=True, help="Checkpoint directory")
+    parser.add_argument("--tokenizer", "-t", default=None, help="Tokenizer/config directory (default: same as checkpoint)")
     parser.add_argument("--output", "-o", default="codex_results.csv", help="Output CSV")
-    parser.add_argument("--max_tokens", type=int, default=300, help="Max tokens per generation")
+    parser.add_argument("--max_tokens", type=int, default=512, help="Max tokens per generation")
     parser.add_argument("--temperature", type=float, default=0.7, help="Sampling temperature")
     args = parser.parse_args()
 
     ckpt_dir = Path(args.checkpoint)
+    tokenizer_dir = Path(args.tokenizer) if args.tokenizer else ckpt_dir
     checkpoints = sorted(ckpt_dir.glob("checkpoint_epoch*.pt"),
                          key=lambda f: int(f.stem.split("epoch")[1]))
 
@@ -139,7 +159,7 @@ def main():
         print(f"EPOCH {epoch_num} - {ckpt_file.name}")
         print(f"{'='*60}")
 
-        model, tokenizer, config, device = load_specific_checkpoint(ckpt_dir, ckpt_file)
+        model, tokenizer, config, device = load_specific_checkpoint(ckpt_dir, ckpt_file, tokenizer_dir=tokenizer_dir)
 
         for i, prompt in enumerate(PROMPTS):
             formatted = CHAT_TEMPLATE.format(prompt=prompt)
