@@ -89,17 +89,20 @@ def load_model(checkpoint_dir: str = "checkpoints", device: str = None):
     if is_pt or latest.suffix == ".pt":
         # Load .pt checkpoint (training format)
         ckpt = torch.load(latest, map_location="cpu", weights_only=False)
-        if "model" in ckpt:
+        if "model" in ckpt and isinstance(ckpt["model"], dict):
             state_dict = ckpt["model"]
         else:
             state_dict = ckpt
-        # Strip 'model.' prefix if present
-        state_dict = {k.removeprefix("model."): v for k, v in state_dict.items()}
     else:
         # Load safetensors
         state_dict = load_file(latest)
 
-    model.load_state_dict(state_dict, strict=False)
+    # Try loading as-is first, strip 'model.' prefix if that fails
+    missing, unexpected = model.load_state_dict(state_dict, strict=False)
+    if len(unexpected) == len(state_dict):
+        # All keys unexpected - try stripping 'model.' prefix
+        stripped = {k.removeprefix("model."): v for k, v in state_dict.items()}
+        model.load_state_dict(stripped, strict=False)
     model.eval()
     model = model.to(device)
 
