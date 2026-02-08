@@ -1054,7 +1054,6 @@ def main():
     # No validation split - use all data for training
     pad_token_id = tokenizer.pad_token_id or 0
     train_dataset = dataset
-        print("Validation: DISABLED")
 
     # DataLoader
     train_loader = DataLoader(
