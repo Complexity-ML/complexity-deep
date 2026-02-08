@@ -3,7 +3,7 @@
 
 model:
   checkpoint: "./checkpoints/pacific-prime-code/checkpoint_epoch70.pt"
-  tokenizer: "./checkpoints"
+  tokenizer: "./checkpoints/pacific-prime-code"
   output: "./checkpoints/pacific-prime-python"
 
 training:
