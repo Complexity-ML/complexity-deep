@@ -844,7 +844,7 @@ def main():
 
     # Output
     parser.add_argument("--output", type=str, default=None, help="Output dir")
-    parser.add_argument("--save-every", type=int, default=1, help="Save every N epochs")
+    parser.add_argument("--save-every", type=int, default=None, help="Save every N epochs")
 
     # Validation
     parser.add_argument("--val-split", type=float, default=0.0, help="Validation split ratio (0 to disable, removed)")
@@ -908,6 +908,8 @@ def main():
         args.output = "./checkpoints-conv-sft"
     if args.template is None:
         args.template = "default"
+    if args.save_every is None:
+        args.save_every = 1
 
     # Validate required args
     if not args.checkpoint:
