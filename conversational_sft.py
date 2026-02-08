@@ -847,8 +847,8 @@ def main():
     parser.add_argument("--save-every", type=int, default=1, help="Save every N epochs")
 
     # Validation
-    parser.add_argument("--val-split", type=float, default=0.05, help="Validation split ratio (0 to disable)")
-    parser.add_argument("--eval-every", type=int, default=1, help="Evaluate every N epochs")
+    parser.add_argument("--val-split", type=float, default=0.0, help="Validation split ratio (0 to disable, removed)")
+    parser.add_argument("--eval-every", type=int, default=1, help="Evaluate every N epochs (unused)")
 
     args = parser.parse_args()
 
@@ -1051,27 +1051,9 @@ def main():
     else:
         raise ValueError("Must provide --dataset or --datasets-json")
 
-    # Split dataset into train/val if requested
+    # No validation split - use all data for training
     pad_token_id = tokenizer.pad_token_id or 0
-    val_loader = None
-
-    if args.val_split > 0:
-        from torch.utils.data import random_split
-        val_size = int(len(dataset) * args.val_split)
-        train_size = len(dataset) - val_size
-        train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
-        print(f"Split: {train_size} train / {val_size} val ({args.val_split*100:.1f}%)")
-
-        val_loader = DataLoader(
-            val_dataset,
-            batch_size=args.batch_size,
-            shuffle=False,
-            collate_fn=lambda b: collate_fn(b, pad_token_id),
-            num_workers=args.num_workers,
-            pin_memory=True,
-        )
-    else:
-        train_dataset = dataset
+    train_dataset = dataset
         print("Validation: DISABLED")
 
     # DataLoader
@@ -1134,18 +1116,6 @@ def main():
         )
 
         print(f"Epoch {epoch} - Train loss: {avg_loss:.4f}")
-
-        # Validation
-        if val_loader is not None and epoch % args.eval_every == 0:
-            val_loss, val_ppl = evaluate(
-                model=model,
-                dataloader=val_loader,
-                device=device,
-                use_amp=args.bf16,
-            )
-            writer.add_scalar("val/loss", val_loss, global_step)
-            writer.add_scalar("val/perplexity", val_ppl, global_step)
-            print(f"Epoch {epoch} - Val loss: {val_loss:.4f}, Val PPL: {val_ppl:.2f}")
 
         # Save checkpoint
         if epoch % args.save_every == 0:
