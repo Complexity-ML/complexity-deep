@@ -1,0 +1,41 @@
+# Node Python: Python Code Specialist
+# Focus: Pure Python code generation, algorithms, data structures
+
+model:
+  checkpoint: "./checkpoints/pacific-prime-ros2/checkpoint_epoch3.pt"
+  tokenizer: "./checkpoints"
+  output: "./checkpoints/pacific-prime-python"
+
+training:
+  epochs: 1000
+  batch_size: 16
+  gradient_accumulation: 4
+  learning_rate: 2e-5
+  weight_decay: 0.01
+  max_length: 4096
+  warmup_ratio: 0.03
+  gradient_checkpointing: true
+  bf16: false
+  save_every: 10
+
+data:
+  datasets:
+    # Python code instructions - 18k alpaca format, pure Python
+    - name: "iamtarun/python_code_instructions_18k_alpaca"
+      weight: 1.0
+      format: "alpaca"
+  max_samples: 18000
+
+specialization:
+  name: "python"
+  skills:
+    - python_basics
+    - algorithms
+    - data_structures
+    - oop
+    - decorators
+    - generators
+    - list_comprehensions
+    - file_io
+    - error_handling
+    - stdlib
