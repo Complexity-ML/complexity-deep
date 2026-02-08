@@ -7,7 +7,7 @@ model:
   output: "./checkpoints/pacific-prime-ros2"
 
 training:
-  epochs: 700
+  epochs: 10000
   batch_size: 16
   gradient_accumulation: 4
   learning_rate: 2e-5
