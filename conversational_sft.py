@@ -879,6 +879,8 @@ def main():
             # Template
             ('template', 'name'): 'template',
             ('template', 'mask_user'): None,  # Inverse of no_mask_user
+            # Saving
+            ('training', 'save_every'): 'save_every',
             # Validation
             ('validation', 'split'): 'val_split',
             ('validation', 'eval_every'): 'eval_every',

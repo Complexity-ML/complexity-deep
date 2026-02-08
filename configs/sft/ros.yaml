@@ -16,6 +16,7 @@ training:
   warmup_ratio: 0.03
   gradient_checkpointing: true
   bf16: false
+  save_every: 10
 
 data:
   datasets:
