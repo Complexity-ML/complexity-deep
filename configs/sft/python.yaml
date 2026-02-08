@@ -2,7 +2,7 @@
 # Focus: Pure Python code generation, algorithms, data structures
 
 model:
-  checkpoint: "./checkpoints/pacific-prime-ros2/checkpoint_epoch690.pt"
+  checkpoint: "./checkpoints/pacific-prime-ros2/checkpoint_epoch700.pt"
   tokenizer: "./checkpoints"
   output: "./checkpoints/pacific-prime-python"
 
