@@ -1,0 +1,35 @@
+# Node Chat: General Conversational Chatbot
+# Focus: Greetings, general knowledge, chatbot personality
+
+model:
+  checkpoint: "./checkpoints/pacific-prime-python/checkpoint_epoch450.pt"
+  tokenizer: "./checkpoints/pacific-prime-code"
+  output: "./checkpoints/pacific-prime-chat"
+
+training:
+  epochs: 1000
+  batch_size: 4
+  gradient_accumulation: 16
+  learning_rate: 2e-5
+  weight_decay: 0.01
+  max_length: 4096
+  warmup_ratio: 0.03
+  gradient_checkpointing: true
+  bf16: false
+  save_every: 10
+
+data:
+  datasets:
+    - name: "timdettmers/openassistant-guanaco"
+      weight: 1.0
+      format: "oasst"
+  max_samples: 5000
+
+specialization:
+  name: "chat"
+  skills:
+    - greetings
+    - general_knowledge
+    - conversation
+    - personality
+    - helpfulness
