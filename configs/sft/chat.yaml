@@ -20,9 +20,9 @@ training:
 
 data:
   datasets:
-    - name: "timdettmers/openassistant-guanaco"
+    - name: "yahma/alpaca-cleaned"
       weight: 1.0
-      format: "guanaco"
+      format: "alpaca"
   max_samples: 5000
 
 specialization:
