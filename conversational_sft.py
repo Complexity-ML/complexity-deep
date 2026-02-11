@@ -977,6 +977,7 @@ def main():
     tokenizer_path = args.tokenizer or args.checkpoint
     print(f"Loading tokenizer: {tokenizer_path}")
     tokenizer = PreTrainedTokenizerFast.from_pretrained(tokenizer_path)
+    tokenizer.model_max_length = args.max_length
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
