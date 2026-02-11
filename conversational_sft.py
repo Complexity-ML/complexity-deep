@@ -170,6 +170,20 @@ def convert_to_messages(example: Dict[str, Any], format_name: str) -> List[Dict[
             ]
         return messages
 
+    elif format_name == "guanaco":
+        # Guanaco format: single "text" field with ### Human: / ### Assistant: markers
+        messages = []
+        text = example.get("text", "")
+        import re
+        parts = re.split(r'### (Human|Assistant):', text)
+        # parts[0] is before first marker (usually empty), then alternating role/content
+        for i in range(1, len(parts) - 1, 2):
+            role = "user" if parts[i] == "Human" else "assistant"
+            content = parts[i + 1].strip()
+            if content:
+                messages.append({"role": role, "content": content})
+        return messages
+
     elif format_name == "sharegpt":
         # ShareGPT format
         messages = []

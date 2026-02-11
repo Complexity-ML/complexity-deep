@@ -22,7 +22,7 @@ data:
   datasets:
     - name: "timdettmers/openassistant-guanaco"
       weight: 1.0
-      format: "oasst"
+      format: "guanaco"
   max_samples: 10000
 
 specialization:
