@@ -23,7 +23,7 @@ data:
     - name: "timdettmers/openassistant-guanaco"
       weight: 1.0
       format: "oasst"
-  max_samples: 5000
+  max_samples: 10000
 
 specialization:
   name: "chat"
