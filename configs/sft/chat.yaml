@@ -2,18 +2,18 @@
 # Focus: Greetings, general knowledge, chatbot personality
 
 model:
-  checkpoint: "./checkpoints/pacific-prime-python/checkpoint_epoch450.pt"
+  checkpoint: "./checkpoints/pacific-prime-chat/checkpoint_epoch360.pt"
   tokenizer: "./checkpoints/pacific-prime-code"
   output: "./checkpoints/pacific-prime-chat"
 
 training:
-  epochs: 1000
+  epochs: 500
   batch_size: 8
   gradient_accumulation: 8
-  learning_rate: 2e-5
+  learning_rate: 5e-6
   weight_decay: 0.01
   max_length: 2048
-  warmup_ratio: 0.03
+  warmup_ratio: 0.05
   gradient_checkpointing: true
   bf16: false
   save_every: 10
@@ -23,7 +23,7 @@ data:
     - name: "yahma/alpaca-cleaned"
       weight: 1.0
       format: "alpaca"
-  max_samples: 5000
+  max_samples: 20000
 
 specialization:
   name: "chat"
