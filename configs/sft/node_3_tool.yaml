@@ -20,13 +20,13 @@ training:
 data:
   datasets:
     - name: "gorilla-llm/APIBench"
-      weight: 0.25
+      weight: 1.0
     - name: "Salesforce/xlam-function-calling-60k"
-      weight: 0.25
+      weight: 1.0
     - name: "glaiveai/glaive-function-calling-v2"
-      weight: 0.25
+      weight: 1.0
     - name: "NousResearch/hermes-function-calling-v1"
-      weight: 0.25
+      weight: 1.0
   format: "sharegpt"
   max_samples: 500000
 

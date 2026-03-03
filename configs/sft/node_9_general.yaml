@@ -21,24 +21,24 @@ data:
   datasets:
     # Mix of all domains
     - name: "OpenAssistant/oasst1"
-      weight: 0.20
+      weight: 1.0
       format: "oasst"
     - name: "teknium/OpenHermes-2.5"
-      weight: 0.20
+      weight: 1.0
       format: "sharegpt"
     - name: "cognitivecomputations/dolphin"
       subset: "flan1m-alpaca-uncensored"
-      weight: 0.16
+      weight: 1.0
       format: "alpaca"
     - name: "HuggingFaceH4/ultrachat_200k"
       split: "train_sft"
-      weight: 0.14
+      weight: 1.0
       format: "ultrachat"
     - name: "Open-Orca/SlimOrca"
-      weight: 0.16
+      weight: 1.0
       format: "sharegpt"
     - name: "WizardLM/WizardLM_evol_instruct_70k"
-      weight: 0.14
+      weight: 1.0
       format: "alpaca"
   format: "sharegpt"
   max_samples: 500000

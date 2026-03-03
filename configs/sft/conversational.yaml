@@ -21,24 +21,24 @@ data:
   datasets:
     # OpenAssistant - High quality multi-turn conversations
     - name: "OpenAssistant/oasst1"
-      weight: 0.30
+      weight: 1.0
       format: "oasst"
     # OpenOrca - High quality GPT-4 style conversations
     - name: "Open-Orca/OpenOrca"
-      weight: 0.25
+      weight: 1.0
       format: "alpaca"
     # Dolphin - Clean instructional data
     - name: "cognitivecomputations/dolphin"
       subset: "flan1m-alpaca-uncensored"
-      weight: 0.20
+      weight: 1.0
       format: "dolphin"
     # UltraChat - Large-scale conversations
     - name: "stingning/ultrachat"
-      weight: 0.15
+      weight: 1.0
       format: "messages"
     # Helpful/harmless conversations
     - name: "Anthropic/hh-rlhf"
-      weight: 0.10
+      weight: 1.0
       format: "hh"
   max_samples: 200000
 

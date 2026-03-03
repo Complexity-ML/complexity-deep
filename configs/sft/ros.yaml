@@ -22,11 +22,11 @@ data:
   datasets:
     # ROS2 Q&A - Nav2, MoveIt2, URDF, launch files, Gazebo (1.8k)
     - name: "ashwin-4000/ros_instruct_dataset"
-      weight: 0.50
+      weight: 1.0
       format: "alpaca"
     # ROS2 instruction-output - DDS, QoS, CMake, Python/C++ client libs (2k)
     - name: "1312354o/llama-ros2"
-      weight: 0.50
+      weight: 1.0
       format: "alpaca"
   max_samples: 4000
 

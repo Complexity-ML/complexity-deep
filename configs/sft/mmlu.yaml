@@ -24,33 +24,33 @@ data:
     - name: "cais/mmlu"
       subset: "all"
       split: "auxiliary_train"  # MMLU uses this split name
-      weight: 0.40
+      weight: 1.0
       format: "mmlu"
     # SciQ - Science questions (transfert général)
     - name: "allenai/sciq"
-      weight: 0.15
+      weight: 1.0
       format: "sciq"
     # ARC - Reasoning challenges
     - name: "allenai/ai2_arc"
       subset: "ARC-Challenge"
       split: "train"
-      weight: 0.12
+      weight: 1.0
       format: "arc"
     - name: "allenai/ai2_arc"
       subset: "ARC-Easy"
       split: "train"
-      weight: 0.08
+      weight: 1.0
       format: "arc"
     # HellaSwag - Sentence completion
     - name: "Rowan/hellaswag"
       split: "train"
-      weight: 0.15
+      weight: 1.0
       format: "hellaswag"
     # WinoGrande - Coreference resolution
     - name: "winogrande"
       subset: "winogrande_xl"
       split: "train"
-      weight: 0.10
+      weight: 1.0
       format: "winogrande"
   max_samples: 150000
 

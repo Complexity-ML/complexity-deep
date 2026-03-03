@@ -21,13 +21,13 @@ data:
   datasets:
     - name: "openai/gsm8k"
       subset: "main"
-      weight: 0.20
+      weight: 1.0
     - name: "AI-MO/NuminaMath-CoT"
-      weight: 0.30
+      weight: 1.0
     - name: "meta-math/MetaMathQA"
-      weight: 0.20
+      weight: 1.0
     - name: "microsoft/orca-math-word-problems-200k"
-      weight: 0.30
+      weight: 1.0
   format: "qa"
   max_samples: 500000
 

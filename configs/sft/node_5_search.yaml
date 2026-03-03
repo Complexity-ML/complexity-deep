@@ -21,15 +21,15 @@ data:
   datasets:
     - name: "ms_marco"
       subset: "v2.1"
-      weight: 0.30
+      weight: 1.0
     - name: "natural_questions"
-      weight: 0.20
+      weight: 1.0
     - name: "hotpot_qa"
-      weight: 0.20
+      weight: 1.0
     - name: "trivia_qa"
-      weight: 0.16
+      weight: 1.0
     - name: "squad_v2"
-      weight: 0.14
+      weight: 1.0
   format: "sharegpt"
   max_samples: 500000
 

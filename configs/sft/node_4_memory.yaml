@@ -20,15 +20,15 @@ training:
 data:
   datasets:
     - name: "THUDM/LongBench"
-      weight: 0.30
+      weight: 1.0
     - name: "narrativeqa"
-      weight: 0.20
+      weight: 1.0
     - name: "abisee/cnn_dailymail"
-      weight: 0.20
+      weight: 1.0
     - name: "multi_news"
-      weight: 0.16
+      weight: 1.0
     - name: "Samsung/samsum"
-      weight: 0.14
+      weight: 1.0
   format: "sharegpt"
   max_samples: 500000
 

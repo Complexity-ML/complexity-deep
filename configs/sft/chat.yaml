@@ -1,29 +1,43 @@
 # Node Chat: General Conversational Chatbot
-# Focus: Greetings, general knowledge, chatbot personality
+# Focus: Greetings, general knowledge, chatbot personality, multi-turn
+# Equal weights → balanced mix, no dataset domination
+#
+# Run:
+#   python conversational_sft.py --config configs/sft/chat.yaml
 
 model:
-  checkpoint: "./checkpoints/pacific-prime-chat/checkpoint_epoch360.pt"
+  checkpoint: "../checkpoints/pacific-prime-chat/checkpoint_epoch360.pt"
   tokenizer: "./checkpoints/pacific-prime-code"
-  output: "./checkpoints/pacific-prime-chat"
+  output: "../checkpoints/pacific-prime-chat-v2"
 
 training:
   epochs: 500
   batch_size: 4
   gradient_accumulation: 16
-  learning_rate: 5e-6
+  learning_rate: 1e-5
   weight_decay: 0.01
   max_length: 2048
-  warmup_ratio: 0.05
+  warmup_ratio: 0.03
   gradient_checkpointing: true
   bf16: false
   save_every: 10
 
 data:
   datasets:
+    # Alpaca: instruction-following (51K dispo)
     - name: "yahma/alpaca-cleaned"
       weight: 1.0
       format: "alpaca"
-  max_samples: 20000
+    # OpenAssistant: real multi-turn human dialogues (84K dispo)
+    - name: "OpenAssistant/oasst1"
+      weight: 1.0
+      format: "oasst"
+    # Dolly: factual Q&A with context (15K dispo)
+    - name: "databricks/databricks-dolly-15k"
+      weight: 1.0
+      format: "alpaca"
+  # Equal weights → 10K per dataset → 30K total, balanced mix
+  max_samples: 30000
 
 specialization:
   name: "chat"
@@ -33,3 +47,5 @@ specialization:
     - conversation
     - personality
     - helpfulness
+    - factual_accuracy
+    - multi_turn

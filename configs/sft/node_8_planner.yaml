@@ -20,15 +20,15 @@ training:
 data:
   datasets:
     - name: "THUDM/AgentInstruct"
-      weight: 0.30
+      weight: 1.0
     - name: "cognitivecomputations/dolphin-coder"
-      weight: 0.20
+      weight: 1.0
     - name: "Open-Orca/OpenOrca"
-      weight: 0.20
+      weight: 1.0
     - name: "garage-bAInd/Open-Platypus"
-      weight: 0.16
+      weight: 1.0
     - name: "WizardLM/WizardLM_evol_instruct_V2_196k"
-      weight: 0.14
+      weight: 1.0
   format: "sharegpt"
   max_samples: 500000
 
