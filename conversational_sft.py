@@ -911,6 +911,10 @@ def main():
                 elif getattr(args, arg_name, None) is None or \
                      (arg_name in ['epochs', 'batch_size', 'gradient_accumulation', 'bf16', 'save_every', 'lr', 'weight_decay', 'max_length', 'warmup_ratio', 'gradient_checkpointing'] and
                       getattr(args, arg_name) == parser.get_default(arg_name)):
+                    # Cast to the correct type based on argparse action
+                    action = {a.dest: a for a in parser._actions}.get(arg_name)
+                    if action and action.type:
+                        value = action.type(value)
                     setattr(args, arg_name, value)
 
         # Handle datasets from config
