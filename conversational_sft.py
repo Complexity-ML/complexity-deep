@@ -909,7 +909,7 @@ def main():
                         if getattr(args, 'no_mask_user', None) is None:
                             args.no_mask_user = not value
                 elif getattr(args, arg_name, None) is None or \
-                     (arg_name in ['epochs', 'batch_size', 'gradient_accumulation'] and
+                     (arg_name in ['epochs', 'batch_size', 'gradient_accumulation', 'bf16', 'save_every', 'lr', 'weight_decay', 'max_length', 'warmup_ratio', 'gradient_checkpointing'] and
                       getattr(args, arg_name) == parser.get_default(arg_name)):
                     setattr(args, arg_name, value)
 
@@ -1110,6 +1110,7 @@ def main():
 
     # Scaler
     scaler = GradScaler() if args.bf16 and AMP_AVAILABLE else None
+    print(f"BF16: {args.bf16}, AMP_AVAILABLE: {AMP_AVAILABLE}, Scaler: {scaler is not None}")
 
     # Training
     global_step = 0
