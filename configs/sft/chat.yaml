@@ -6,9 +6,9 @@
 #   python conversational_sft.py --config configs/sft/chat.yaml
 
 model:
-  checkpoint: "../checkpoints/pacific-prime-chat/checkpoint_epoch360.pt"
-  tokenizer: "./checkpoints/pacific-prime-code"
-  output: "../checkpoints/pacific-prime-chat-v2"
+  checkpoint: "/workspace/checkpoints/pacific-prime-chat/checkpoint_epoch360.pt"
+  tokenizer: "/workspace/checkpoints/pacific-prime-chat"
+  output: "/workspace/output"
 
 training:
   epochs: 500
