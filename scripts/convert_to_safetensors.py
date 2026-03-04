@@ -23,6 +23,9 @@ def convert_checkpoint(checkpoint_path: str, output_path: str = None):
         state_dict = checkpoint['model_state_dict']
         print(f"  Step: {checkpoint.get('step', 'unknown')}")
         print(f"  Loss: {checkpoint.get('loss', 'unknown')}")
+    elif 'model' in checkpoint and isinstance(checkpoint['model'], dict):
+        state_dict = checkpoint['model']
+        print(f"  Epoch: {checkpoint.get('epoch', 'unknown')}")
     elif 'state_dict' in checkpoint:
         state_dict = checkpoint['state_dict']
     else:
