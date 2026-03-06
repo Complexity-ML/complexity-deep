@@ -10,7 +10,7 @@ model:
   output: "/workspace/output-lora"
 
 training:
-  epochs: 3
+  epochs: 15
   batch_size: 8
   gradient_accumulation: 4
   learning_rate: 2e-4
@@ -19,7 +19,7 @@ training:
   warmup_ratio: 0.05
   gradient_checkpointing: true
   bf16: true
-  save_every: 1
+  save_every: 5
 
 lora:
   enabled: true
