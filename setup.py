@@ -24,6 +24,7 @@ setup(
         "datasets>=2.0.0",
         "tokenizers>=0.13.0",
         "safetensors>=0.3.0",
+        "sentencepiece>=0.1.99",
         "peft>=0.7.0",
         "tqdm",
         "tensorboard",
