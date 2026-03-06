@@ -15,7 +15,7 @@ training:
   max_length: 512
   warmup_ratio: 0.1
   gradient_checkpointing: true
-  bf16: true
+  bf16: false
 
 data:
   datasets:
