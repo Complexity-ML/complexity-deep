@@ -612,32 +612,38 @@ class ConversationalDataset(Dataset):
         return {"input_ids": input_ids, "labels": labels}
 
     def _create_masked_labels(self, messages: List[Dict], tokens: List[int]) -> torch.Tensor:
-        """Create labels with -100 for user messages (no loss computed)."""
-        # Use Python list to avoid creating intermediate tensors in the loop
+        """Create labels with -100 for user messages (no loss computed).
+
+        Loss starts AFTER the "Assistant:" prefix so the model learns to
+        predict content only — matching inference where "Assistant:" is
+        already in the prompt via add_generation_prompt.
+        """
         labels = [-100] * len(tokens)
 
-        # Find assistant response positions
-        # We tokenize incrementally to find boundaries
-        current_pos = 0
-
         for i, msg in enumerate(messages):
-            # Render up to this message
+            if msg["role"] != "assistant":
+                continue
+
+            # Find where assistant CONTENT starts (after "Assistant: " prefix)
+            # by rendering with empty content to get the prefix boundary
+            prefix_messages = messages[:i] + [{"role": "assistant", "content": ""}]
+            prefix_text = self.template.render(messages=prefix_messages)
+            prefix_tokens = self.tokenizer.encode(prefix_text, add_special_tokens=True)
+            start_pos = len(prefix_tokens)
+
+            # Find where this assistant message ends
             partial_messages = messages[:i+1]
             partial_text = self.template.render(messages=partial_messages)
             partial_tokens = self.tokenizer.encode(partial_text, add_special_tokens=True)
+            end_pos = min(len(partial_tokens), len(tokens))
 
-            if msg["role"] == "assistant":
-                # Compute loss on assistant tokens
-                start_pos = current_pos
-                end_pos = min(len(partial_tokens), len(tokens))
-                # Direct list slice assignment - no tensor creation
+            # Compute loss on content tokens only (not "Assistant:" prefix)
+            if start_pos < end_pos:
                 labels[start_pos:end_pos] = tokens[start_pos:end_pos]
 
-            current_pos = len(partial_tokens)
-            if current_pos >= len(tokens):
+            if end_pos >= len(tokens):
                 break
 
-        # Single tensor creation at the end
         return torch.tensor(labels, dtype=torch.long)
 
     def _empty_item(self):
