@@ -1056,11 +1056,13 @@ def main():
 
     if lora_config_dict and lora_config_dict.get('enabled', False):
         from peft import LoraConfig, get_peft_model, TaskType
-        # PEFT CAUSAL_LM expects prepare_inputs_for_generation on the model
+        # PEFT compatibility: add missing attributes expected by HF
         if not hasattr(model, 'prepare_inputs_for_generation'):
             def _prepare_inputs(self, input_ids, **kwargs):
                 return {"input_ids": input_ids, **kwargs}
             model.prepare_inputs_for_generation = _prepare_inputs.__get__(model)
+        if hasattr(model, 'config') and not hasattr(model.config, 'model_type'):
+            model.config.model_type = "complexity-deep"
         lora_cfg = LoraConfig(
             task_type=TaskType.CAUSAL_LM,
             r=lora_config_dict.get('rank', 16),
