@@ -131,7 +131,10 @@ class ComplexityAttention(nn.Module):
         # v0.13.0: KQV order (industry standard - Qwen, Llama, GPT)
         # Instead of 6 matmuls: k = x @ Wk + mu @ Wmu_k
         # We do 3 matmuls: k = cat([x, mu]) @ cat([Wk; Wmu_k])
-        if USE_FUSED_MU_KQV_CONCAT and mu_prev is not None:
+        # NOTE: Disabled when PEFT/LoRA is active — F.linear() bypasses LoRA wrappers,
+        # causing q/k/v LoRA adapters to receive no gradients and stay at zero.
+        _peft_active = hasattr(self.k_proj, 'lora_A') or hasattr(self.k_proj, 'base_layer')
+        if USE_FUSED_MU_KQV_CONCAT and mu_prev is not None and not _peft_active:
             # Concat x and mu: [B, S, H] + [B, S, H] -> [B, S, 2H]
             x_mu = torch.cat([hidden_states, mu_prev], dim=-1)
 
