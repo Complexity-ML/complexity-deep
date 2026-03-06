@@ -227,6 +227,7 @@ class DeepForCausalLM(nn.Module):
         past_key_values: Optional[List[Tuple[torch.Tensor, torch.Tensor]]] = None,
         velocity_state: Optional[torch.Tensor] = None,
         use_cache: bool = False,
+        **kwargs,
     ) -> CausalLMOutput:
         """
         Forward pass.
