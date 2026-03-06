@@ -44,7 +44,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR, LambdaLR
 from torch.utils.tensorboard import SummaryWriter
 
 from datasets import load_dataset
-from transformers import PreTrainedTokenizerFast
+from transformers import AutoTokenizer, PreTrainedTokenizerFast
 from tqdm import tqdm
 from jinja2 import Template
 
@@ -980,7 +980,10 @@ def main():
     # Load tokenizer
     tokenizer_path = args.tokenizer or args.checkpoint
     print(f"Loading tokenizer: {tokenizer_path}")
-    tokenizer = PreTrainedTokenizerFast.from_pretrained(tokenizer_path)
+    try:
+        tokenizer = PreTrainedTokenizerFast.from_pretrained(tokenizer_path)
+    except ValueError:
+        tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
     tokenizer.model_max_length = args.max_length
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
