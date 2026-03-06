@@ -10,8 +10,8 @@ model:
   output: "/workspace/output-lora"
 
 training:
-  epochs: 15
-  batch_size: 8
+  epochs: 30
+  batch_size: 4
   gradient_accumulation: 4
   learning_rate: 2e-4
   weight_decay: 0.01
@@ -23,8 +23,8 @@ training:
 
 lora:
   enabled: true
-  rank: 16
-  alpha: 32
+  rank: 64
+  alpha: 128
   dropout: 0.05
   target_modules:
     - q_proj
