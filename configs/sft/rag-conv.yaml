@@ -1,0 +1,77 @@
+# Node RAG+Chat: Conversational Chatbot with Reading Comprehension
+# Focus: All chat skills + RAG context grounding (answer from provided context)
+# Equal weights → balanced mix of chat + RAG datasets
+#
+# Run:
+#   python conversational_sft.py --config configs/sft/rag-conv.yaml
+
+model:
+  checkpoint: "/workspace/checkpoints/pacific-prime-chat/checkpoint_epoch360.pt"
+  tokenizer: "/workspace/checkpoints/pacific-prime-chat"
+  output: "/workspace/output/pacific-prime-rag-conv"
+
+training:
+  epochs: 500
+  batch_size: 8
+  gradient_accumulation: 8
+  learning_rate: 1e-5
+  weight_decay: 0.01
+  max_length: 2048
+  warmup_ratio: 0.03
+  gradient_checkpointing: true
+  bf16: false
+  save_every: 10
+
+data:
+  datasets:
+    # --- Chat datasets (same as chat.yaml) ---
+
+    # Alpaca: instruction-following (51K dispo)
+    - name: "yahma/alpaca-cleaned"
+      weight: 1.0
+      format: "alpaca"
+    # OpenAssistant: real multi-turn human dialogues (84K dispo)
+    - name: "OpenAssistant/oasst1"
+      weight: 1.0
+      format: "oasst"
+    # Dolly: factual Q&A with context (15K dispo)
+    - name: "databricks/databricks-dolly-15k"
+      weight: 1.0
+      format: "alpaca"
+
+    # --- RAG datasets (reading comprehension with context) ---
+
+    # SQuAD v2: extractive QA with context paragraphs (130K+ examples)
+    # Teaches the model to answer from a provided context passage
+    - name: "rajpurkar/squad_v2"
+      weight: 1.0
+      format: "squad"
+    # Natural Questions: Google search questions with Wikipedia context
+    - name: "google-research-datasets/natural_questions"
+      weight: 1.0
+      format: "nq"
+      subset: "default"
+
+  max_samples: 50000
+
+template:
+  name: "rag"
+  # RAG examples use "Context:\n{context}\n\n" prefix before the question
+  # This matches the injection format used by vllm-i64 /v1/chat/completions?rag=true
+  context_prefix: "Context:\n"
+  context_suffix: "\n\n"
+  mask_user: true  # Only compute loss on assistant responses
+
+specialization:
+  name: "rag-conv"
+  skills:
+    - greetings
+    - general_knowledge
+    - conversation
+    - personality
+    - helpfulness
+    - factual_accuracy
+    - multi_turn
+    - reading_comprehension
+    - context_grounding
+    - extractive_qa
