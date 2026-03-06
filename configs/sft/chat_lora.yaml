@@ -5,12 +5,12 @@
 #   python conversational_sft.py --config configs/sft/chat_lora.yaml
 
 model:
-  checkpoint: "/workspace/checkpoints/pacific-prime-chat/checkpoint_epoch500.pt"
+  checkpoint: "/workspace/output-lora/checkpoint_epoch15.pt"
   tokenizer: "/workspace/checkpoints/pacific-prime-chat"
   output: "/workspace/output-lora"
 
 training:
-  epochs: 30
+  epochs: 20
   batch_size: 4
   gradient_accumulation: 4
   learning_rate: 2e-4
