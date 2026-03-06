@@ -15,7 +15,7 @@ training:
   max_length: 512
   warmup_ratio: 0.05
   gradient_checkpointing: true
-  bf16: false
+  bf16: true
 
 data:
   split: "train"  # Default split for most datasets
