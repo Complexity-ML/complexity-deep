@@ -1,0 +1,69 @@
+# Chat LoRA: Fix generation quality on top of SFT checkpoint
+# Targets: natural conversation, no "As an AI...", context grounding
+#
+# Run:
+#   python conversational_sft.py --config configs/sft/chat_lora.yaml
+
+model:
+  checkpoint: "/workspace/checkpoints/pacific-prime-chat/checkpoint_epoch500.pt"
+  tokenizer: "/workspace/checkpoints/pacific-prime-chat"
+  output: "/workspace/output-lora"
+
+training:
+  epochs: 3
+  batch_size: 8
+  gradient_accumulation: 4
+  learning_rate: 2e-4
+  weight_decay: 0.01
+  max_length: 2048
+  warmup_ratio: 0.05
+  gradient_checkpointing: true
+  bf16: true
+  save_every: 1
+
+lora:
+  enabled: true
+  rank: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules:
+    - q_proj
+    - v_proj
+    - k_proj
+    - o_proj
+    - gate_up_proj
+    - down_proj
+
+data:
+  datasets:
+    # Alpaca: instruction-following (51K dispo)
+    - name: "yahma/alpaca-cleaned"
+      weight: 1.0
+      format: "alpaca"
+    # OpenAssistant: real multi-turn human dialogues (84K dispo)
+    - name: "OpenAssistant/oasst1"
+      weight: 1.0
+      format: "oasst"
+    # Dolly: factual Q&A with context (15K dispo)
+    - name: "databricks/databricks-dolly-15k"
+      weight: 1.0
+      format: "alpaca"
+  max_samples: 10000
+  filter:
+    # Remove responses containing these patterns
+    exclude_patterns:
+      - "As an AI"
+      - "as an AI"
+      - "I'm an AI"
+      - "I am an AI"
+      - "language model"
+      - "I cannot"
+      - "I'm not able to"
+
+specialization:
+  name: "chat-lora"
+  skills:
+    - natural_conversation
+    - reading_comprehension
+    - context_grounding
+    - instruction_following

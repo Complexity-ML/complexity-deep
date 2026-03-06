@@ -1044,6 +1044,26 @@ def main():
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Model parameters: {total_params / 1e9:.2f}B")
 
+    # LoRA setup
+    lora_config_dict = None
+    if args.config:
+        with open(args.config, 'r') as f:
+            full_config = yaml.safe_load(f)
+        lora_config_dict = full_config.get('lora')
+
+    if lora_config_dict and lora_config_dict.get('enabled', False):
+        from peft import LoraConfig, get_peft_model, TaskType
+        lora_cfg = LoraConfig(
+            task_type=TaskType.CAUSAL_LM,
+            r=lora_config_dict.get('rank', 16),
+            lora_alpha=lora_config_dict.get('alpha', 32),
+            lora_dropout=lora_config_dict.get('dropout', 0.05),
+            target_modules=lora_config_dict.get('target_modules', ['q_proj', 'v_proj']),
+        )
+        model = get_peft_model(model, lora_cfg)
+        model.print_trainable_parameters()
+        print("LoRA: ENABLED")
+
     # Load dataset(s)
     if args.datasets_json:
         # Multiple datasets with weights
@@ -1143,13 +1163,15 @@ def main():
         # Save checkpoint
         if epoch % args.save_every == 0:
             save_path = f"{args.output}/checkpoint_epoch{epoch}.pt"
+            save_state = model.state_dict()
             torch.save({
                 "epoch": epoch,
-                "model": model.state_dict(),
+                "model": save_state,
                 "optimizer": optimizer.state_dict(),
                 "config": config,
                 "global_step": global_step,
                 "chat_template": chat_template,
+                "lora": lora_config_dict is not None and lora_config_dict.get('enabled', False),
             }, save_path)
             print(f"Saved: {save_path}")
 
@@ -1157,13 +1179,31 @@ def main():
             cleanup_old_checkpoints(args.output, keep_last=5)
 
     # Save final model
-    final_path = f"{args.output}/model_conv_sft.pt"
-    torch.save({
-        "model": model.state_dict(),
-        "config": config,
-        "chat_template": chat_template,
-    }, final_path)
-    print(f"\nFinal model: {final_path}")
+    if lora_config_dict and lora_config_dict.get('enabled', False):
+        # LoRA: save adapter only + merged model
+        adapter_path = f"{args.output}/lora_adapter"
+        model.save_pretrained(adapter_path)
+        print(f"\nLoRA adapter: {adapter_path}")
+
+        # Merge LoRA into base model for deployment
+        merged_model = model.merge_and_unload()
+        final_path = f"{args.output}/model_conv_sft.pt"
+        torch.save({
+            "model": merged_model.state_dict(),
+            "config": config,
+            "chat_template": chat_template,
+        }, final_path)
+        print(f"Merged model: {final_path}")
+        save_model = merged_model
+    else:
+        final_path = f"{args.output}/model_conv_sft.pt"
+        torch.save({
+            "model": model.state_dict(),
+            "config": config,
+            "chat_template": chat_template,
+        }, final_path)
+        print(f"\nFinal model: {final_path}")
+        save_model = model
 
     # Save in HF format
     hf_path = f"{args.output}/hf"
@@ -1192,7 +1232,7 @@ def main():
     try:
         from safetensors.torch import save_file
         bf16_state = {k: v.to(torch.bfloat16) if v.dtype == torch.float32 else v
-                      for k, v in model.state_dict().items()}
+                      for k, v in save_model.state_dict().items()}
         save_file(bf16_state, f"{hf_path}/model.safetensors")
         print(f"Saved: {hf_path}/model.safetensors (BF16)")
     except Exception as e:
