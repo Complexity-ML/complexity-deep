@@ -5,8 +5,8 @@
 #   python conversational_sft.py --config configs/sft/chat_lora.yaml
 
 model:
-  checkpoint: "/workspace/output-lora/checkpoint_epoch15.pt"
-  tokenizer: "/workspace/output-lora"
+  checkpoint: "/workspace/checkpoints/pacific-prime-chat/checkpoint_epoch500.pt"
+  tokenizer: "/workspace/checkpoints/pacific-prime-chat"
   output: "/workspace/output-lora"
 
 training:
