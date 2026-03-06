@@ -6,7 +6,7 @@
 
 model:
   checkpoint: "/workspace/output-lora/checkpoint_epoch15.pt"
-  tokenizer: "/workspace/checkpoints/pacific-prime-chat"
+  tokenizer: "/workspace/output-lora"
   output: "/workspace/output-lora"
 
 training:
