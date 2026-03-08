@@ -61,11 +61,15 @@ def build_model(state_dict, config_dict=None, num_experts=4, vocab_size=100000):
     ) + 1
     vocab = state_dict["embed_tokens.weight"].shape[0]
     gu_key = next(k for k in state_dict if "gate_up_proj" in k and "layers.0." in k)
-    inter = state_dict[gu_key].shape[-1] // 2
+    gu_tensor = state_dict[gu_key]
 
     # Detect num_experts from gate_up_proj shape
-    gu_tensor = state_dict[gu_key]
     detected_experts = gu_tensor.shape[0] if gu_tensor.dim() == 3 else 1
+
+    # gate_up_proj = [num_experts, hidden, 2 * expert_intermediate_size]
+    # intermediate_size = expert_intermediate_size * num_experts
+    expert_inter = gu_tensor.shape[-1] // 2
+    inter = expert_inter * detected_experts
 
     # Detect num_kv_heads from k_proj
     k_key = next(k for k in state_dict if "k_proj.weight" in k and "layers.0." in k)
