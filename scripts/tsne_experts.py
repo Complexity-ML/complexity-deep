@@ -53,7 +53,11 @@ def build_model(state_dict, config_dict=None, num_experts=4, vocab_size=100000):
     from complexity_deep.models.modeling import ComplexityForCausalLM
 
     if config_dict is not None:
-        config = ComplexityConfig(**config_dict)
+        # Filter to only valid ComplexityConfig fields
+        import dataclasses
+        valid_fields = {f.name for f in dataclasses.fields(ComplexityConfig)}
+        filtered = {k: v for k, v in config_dict.items() if k in valid_fields}
+        config = ComplexityConfig(**filtered)
     else:
         # Infer from state dict
         hidden = state_dict["layers.0.attention.q_proj.weight"].shape[0]
