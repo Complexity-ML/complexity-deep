@@ -52,31 +52,39 @@ def build_model(state_dict, config_dict=None, num_experts=4, vocab_size=100000):
     from complexity_deep.models.config import ComplexityConfig
     from complexity_deep.models.modeling import ComplexityForCausalLM
 
-    if config_dict is not None:
-        # Filter to only valid ComplexityConfig fields
-        import dataclasses
-        valid_fields = {f.name for f in dataclasses.fields(ComplexityConfig)}
-        filtered = {k: v for k, v in config_dict.items() if k in valid_fields}
-        config = ComplexityConfig(**filtered)
-    else:
-        # Infer from state dict
-        hidden = state_dict["layers.0.attention.q_proj.weight"].shape[0]
-        num_layers = max(
-            int(k.split(".")[1]) for k in state_dict if k.startswith("layers.")
-        ) + 1
-        vocab = state_dict["embed_tokens.weight"].shape[0]
-        inter = state_dict["layers.0.mlp.gate_up_proj"].shape[-1] // 2
+    # Always infer dimensions from state dict (config in .pt may be training config)
+    # Find q_proj key (could be self_attn or attention)
+    q_key = next(k for k in state_dict if "q_proj.weight" in k and "layers.0." in k)
+    hidden = state_dict[q_key].shape[0]
+    num_layers = max(
+        int(k.split(".")[1]) for k in state_dict if k.startswith("layers.")
+    ) + 1
+    vocab = state_dict["embed_tokens.weight"].shape[0]
+    gu_key = next(k for k in state_dict if "gate_up_proj" in k and "layers.0." in k)
+    inter = state_dict[gu_key].shape[-1] // 2
 
-        config = ComplexityConfig(
-            hidden_size=hidden,
-            num_hidden_layers=num_layers,
-            num_attention_heads=16,
-            num_key_value_heads=8,
-            intermediate_size=inter,
-            vocab_size=vocab,
-            num_experts=num_experts,
-            max_position_embeddings=2048,
-        )
+    # Detect num_experts from gate_up_proj shape
+    gu_tensor = state_dict[gu_key]
+    detected_experts = gu_tensor.shape[0] if gu_tensor.dim() == 3 else 1
+
+    # Detect num_kv_heads from k_proj
+    k_key = next(k for k in state_dict if "k_proj.weight" in k and "layers.0." in k)
+    head_dim = hidden // 16  # assume 16 attention heads
+    num_kv_heads = state_dict[k_key].shape[0] // head_dim
+
+    print(f"  Inferred: hidden={hidden}, layers={num_layers}, vocab={vocab}, "
+          f"inter={inter}, experts={detected_experts}, kv_heads={num_kv_heads}")
+
+    config = ComplexityConfig(
+        hidden_size=hidden,
+        num_hidden_layers=num_layers,
+        num_attention_heads=16,
+        num_key_value_heads=num_kv_heads,
+        intermediate_size=inter,
+        vocab_size=vocab,
+        num_experts=detected_experts,
+        max_position_embeddings=2048,
+    )
 
     model = ComplexityForCausalLM(config)
     model.model.load_state_dict(state_dict, strict=False)
