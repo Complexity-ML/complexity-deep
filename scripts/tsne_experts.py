@@ -48,50 +48,53 @@ def load_checkpoint(checkpoint_path, device="cuda"):
 
 
 def build_model(state_dict, config_dict=None, num_experts=4, vocab_size=100000):
-    """Build model from state dict using complexity-deep."""
-    from complexity_deep.models.config import ComplexityConfig
-    from complexity_deep.models.modeling import ComplexityForCausalLM
+    """Build model from state dict — supports complexity-framework format."""
+    import sys, os
+    sys.path.insert(0, str(Path(__file__).parents[2] / "complexity-framework"))
+    from complexity.config import ModelConfig
+    from complexity.models import ComplexityModel
 
-    # Always infer dimensions from state dict (config in .pt may be training config)
-    # Find q_proj key (could be self_attn or attention)
+    # Infer dimensions from state dict
     q_key = next(k for k in state_dict if "q_proj.weight" in k and "layers.0." in k)
     hidden = state_dict[q_key].shape[0]
-    num_layers = max(
-        int(k.split(".")[1]) for k in state_dict if k.startswith("layers.")
-    ) + 1
+    num_layers = max(int(k.split(".")[1]) for k in state_dict if k.startswith("layers.")) + 1
     vocab = state_dict["embed_tokens.weight"].shape[0]
-    gu_key = next(k for k in state_dict if "gate_up_proj" in k and "layers.0." in k)
-    gu_tensor = state_dict[gu_key]
 
-    # Detect num_experts from gate_up_proj shape
-    detected_experts = gu_tensor.shape[0] if gu_tensor.dim() == 3 else 1
+    # Detect expert format: complexity-framework uses experts.0.gate_proj.weight
+    gate_key = next((k for k in state_dict if "experts.0.gate_proj.weight" in k and "layers.0." in k), None)
+    if gate_key:
+        expert_inter = state_dict[gate_key].shape[0]
+        num_experts_found = sum(1 for k in state_dict if f"layers.0.mlp.experts." in k and "gate_proj.weight" in k)
+        inter = expert_inter * num_experts_found
+        mlp_type = "token_routed"
+    else:
+        num_experts_found = 1
+        inter_key = next(k for k in state_dict if "gate_proj.weight" in k and "layers.0." in k)
+        inter = state_dict[inter_key].shape[0]
+        mlp_type = "swiglu"
 
-    # gate_up_proj = [num_experts, hidden, 2 * expert_intermediate_size]
-    # intermediate_size = expert_intermediate_size * num_experts
-    expert_inter = gu_tensor.shape[-1] // 2
-    inter = expert_inter * detected_experts
-
-    # Detect num_kv_heads from k_proj
     k_key = next(k for k in state_dict if "k_proj.weight" in k and "layers.0." in k)
-    head_dim = hidden // 16  # assume 16 attention heads
-    num_kv_heads = state_dict[k_key].shape[0] // head_dim
+    num_kv_heads = state_dict[k_key].shape[0] // (hidden // 12)
 
     print(f"  Inferred: hidden={hidden}, layers={num_layers}, vocab={vocab}, "
-          f"inter={inter}, experts={detected_experts}, kv_heads={num_kv_heads}")
+          f"inter={inter}, experts={num_experts_found}, kv_heads={num_kv_heads}, mlp={mlp_type}")
 
-    config = ComplexityConfig(
+    config = ModelConfig(
         hidden_size=hidden,
         num_hidden_layers=num_layers,
-        num_attention_heads=16,
+        num_attention_heads=12,
         num_key_value_heads=num_kv_heads,
         intermediate_size=inter,
         vocab_size=vocab,
-        num_experts=detected_experts,
+        num_experts=num_experts_found,
         max_position_embeddings=2048,
+        mlp_type=mlp_type,
+        use_inl_dynamics=True,
+        use_qk_norm=True,
     )
 
-    model = ComplexityForCausalLM(config)
-    model.model.load_state_dict(state_dict, strict=False)
+    model = ComplexityModel(config)
+    model.load_state_dict(state_dict, strict=False)
     model.eval()
     return model
 
@@ -106,47 +109,49 @@ class ExpertActivationHook:
 
     def register(self, model):
         """Register forward hooks on all TokenRoutedMLP layers."""
-        for layer_idx, layer in enumerate(model.model.layers):
+        layers = model.layers if hasattr(model, "layers") else model.model.layers
+        for layer_idx, layer in enumerate(layers):
             mlp = layer.mlp
-            # Check if it's a token-routed MLP (has gate_up_proj with 3 dims)
-            if hasattr(mlp, "gate_up_proj") and mlp.gate_up_proj.dim() == 3:
-                handle = mlp.register_forward_hook(
-                    self._make_hook(layer_idx)
-                )
+            is_routed = (
+                (hasattr(mlp, "gate_up_proj") and mlp.gate_up_proj.dim() == 3)
+                or hasattr(mlp, "experts")
+            )
+            if is_routed:
+                handle = mlp.register_forward_hook(self._make_hook(layer_idx))
                 self.handles.append(handle)
         print(f"Registered hooks on {len(self.handles)} TokenRoutedMLP layers")
 
     def _make_hook(self, layer_idx):
         def hook_fn(module, input, output):
-            # output shape: [batch, seq_len, hidden]
-            # input[0] shape: [batch, seq_len, hidden]
             x = input[0]  # [batch, seq_len, hidden]
             batch_size, seq_len, hidden = x.shape
 
-            # Route tokens to experts: token_id % num_experts
-            # We use position index as proxy for token routing
-            gate_up = module.gate_up_proj  # [num_experts, hidden, 2*inter]
-            down = module.down_proj        # [num_experts, inter, hidden]
-            num_experts = gate_up.shape[0]
+            # Build stacked gate_up / down regardless of weight format
+            if hasattr(module, "gate_up_proj") and module.gate_up_proj.dim() == 3:
+                # complexity-deep format: (E, H, 2I) already stacked
+                gate_up = module.gate_up_proj
+                down    = module.down_proj
+                num_experts = gate_up.shape[0]
+            elif hasattr(module, "experts"):
+                # complexity-framework format: ModuleList of Expert
+                num_experts = len(module.experts)
+                gate_up = torch.stack([
+                    torch.cat([e.gate_proj.weight.t(), e.up_proj.weight.t()], dim=-1)
+                    for e in module.experts
+                ])  # (E, H, 2I)
+                down = torch.stack([e.down_proj.weight.t() for e in module.experts])  # (E, I, H)
+            else:
+                return
 
-            # Compute per-expert outputs for each token
             for expert_id in range(num_experts):
-                # Get tokens routed to this expert
                 mask = torch.arange(seq_len, device=x.device) % num_experts == expert_id
-                if not mask.any():
-                    continue
+                tokens = x[:, mask, :]  # [batch, n, hidden]
 
-                tokens = x[:, mask, :]  # [batch, num_tokens, hidden]
-
-                # Expert forward: gate_up then down
-                gu = torch.matmul(tokens, gate_up[expert_id])  # [batch, num_tokens, 2*inter]
+                gu = torch.matmul(tokens, gate_up[expert_id])
                 inter_size = gu.shape[-1] // 2
-                gate = gu[..., :inter_size]
-                up = gu[..., inter_size:]
-                activated = torch.nn.functional.silu(gate) * up  # [batch, num_tokens, inter]
-                expert_out = torch.matmul(activated, down[expert_id])  # [batch, num_tokens, hidden]
+                activated = torch.nn.functional.silu(gu[..., :inter_size]) * gu[..., inter_size:]
+                expert_out = torch.matmul(activated, down[expert_id])
 
-                # Store mean activation per expert per batch item
                 for b in range(batch_size):
                     act = expert_out[b].mean(dim=0).detach().cpu().float().numpy()
                     self.activations.append((expert_id, layer_idx, act))
