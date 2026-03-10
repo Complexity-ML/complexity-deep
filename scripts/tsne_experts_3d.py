@@ -336,6 +336,11 @@ def main():
     X_3d = tsne.fit_transform(X_pca)
     print(f"T-SNE done! KL divergence: {tsne.kl_divergence_:.4f}")
 
+    # Clamp representation outliers (2-98 percentile per axis)
+    p_low, p_high = np.percentile(X_3d, [2, 98], axis=0)
+    X_3d = np.clip(X_3d, p_low, p_high)
+    print(f"Clamped to [{p_low.round(1)}, {p_high.round(1)}]")
+
     # Plots
     print(f"\nGenerating 3D plots in {output_dir}/\n")
     plot_3d_matplotlib(X_3d, expert_ids, layer_ids, config.num_experts, output_dir)
