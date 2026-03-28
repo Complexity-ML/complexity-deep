@@ -1,134 +1,34 @@
 """
-CUDA/Triton accelerated kernels for Complexity.
+CUDA/Triton Accelerated Kernels for Complexity
+===============================================
 
-Provides optimized kernels for:
-- Token-Routed MLP with CGGR
-- Fused QK Norm + Flash Attention
-- Fused RMSNorm + Projections
-- INT8/FP8 Quantization
+Optional GPU-accelerated implementations of the core operations.
+These are provided as reference for reproducing the paper's throughput
+numbers but are NOT required for correctness -- the pure-PyTorch
+implementations in core/ produce identical outputs.
+
+Available optimizations (when Triton is installed):
+- Token-Routed MLP with CGGR (Contiguous Grouped GEMM Routing)
+- Fused QK-Norm + Flash Attention
+- Fused RMSNorm + MLP projections
 - Fused Residual + RMSNorm
+- INT8 quantization with fused GEMM
+- Fused Mu-QKV (mu-guided K/Q/V in a single kernel)
 
-Performance gains:
-- Fused QK Norm + Attention: ~15-20% faster
-- Fused RMSNorm + MLP: ~20-30% faster
-- Persistent CGGR: ~10-15% faster
-- INT8 Quantization: ~40-50% throughput, 50% memory
-- Fused Residual + Norm: ~5-10% faster
-
-Author: Pacific Prime
+Note: The ``pid`` variable used throughout these kernels refers to
+``tl.program_id()`` (Triton's thread-block index), not to any PiD
+controller or dynamical system.
 """
 
-# Check for Triton availability
 try:
     import triton
     HAS_TRITON = True
 except ImportError:
     HAS_TRITON = False
 
-# Original CGGR Token-Routed MLP
-from .triton_token_routed import (
-    TokenRoutedMLPTriton,
-    sort_tokens_by_expert,
-    fused_swiglu_triton,
-    fused_rmsnorm,
-    fused_token_route_residual,
-    RoboticsTokenRoutedLayer,
-)
-
-# Fused QK Norm + Flash Attention
-from .fused_attention import (
-    fused_qk_rmsnorm,
-    flash_attention_triton,
-    fused_qknorm_flash_attention,
-    FusedQKNormAttention,
-)
-
-# Fused RMSNorm + MLP Projections
-from .fused_mlp import (
-    fused_rmsnorm_gate_up,
-    fused_swiglu_down,
-    fused_mlp,
-    FusedSwiGLUMLP,
-    FusedMLP,
-)
-
-# Persistent CGGR
-from .persistent_cggr import (
-    sort_tokens_by_expert_fast,
-    persistent_cggr_gemm,
-    persistent_swiglu_cggr,
-    PersistentTokenRoutedMLP,
-)
-
-# INT8/FP8 Quantization
-from .quantization import (
-    QuantType,
-    dynamic_quantize_int8,
-    int8_gemm,
-    fused_quantize_gemm,
-    QuantizedLinear,
-    Int8TokenRoutedMLP,
-    quantize_model,
-)
-
-# Fused Residual + RMSNorm
-from .fused_residual import (
-    fused_residual_rmsnorm,
-    fused_residual_rmsnorm_dropout,
-    fused_add_rmsnorm_inplace,
-    FusedResidualRMSNorm,
-)
-
-__all__ = [
-    # Triton flag
-    "HAS_TRITON",
-
-    # === Original CGGR ===
-    "TokenRoutedMLPTriton",
-    "sort_tokens_by_expert",
-    "fused_swiglu_triton",
-    "fused_rmsnorm",
-    "fused_token_route_residual",
-    "RoboticsTokenRoutedLayer",
-
-    # === Fused Attention ===
-    "fused_qk_rmsnorm",
-    "flash_attention_triton",
-    "fused_qknorm_flash_attention",
-    "FusedQKNormAttention",
-
-    # === Fused MLP ===
-    "fused_rmsnorm_gate_up",
-    "fused_swiglu_down",
-    "fused_mlp",
-    "FusedSwiGLUMLP",
-    "FusedMLP",
-
-    # === Persistent CGGR ===
-    "sort_tokens_by_expert_fast",
-    "persistent_cggr_gemm",
-    "persistent_swiglu_cggr",
-    "PersistentTokenRoutedMLP",
-
-    # === Quantization ===
-    "QuantType",
-    "dynamic_quantize_int8",
-    "int8_gemm",
-    "fused_quantize_gemm",
-    "QuantizedLinear",
-    "Int8TokenRoutedMLP",
-    "quantize_model",
-
-    # === Fused Residual ===
-    "fused_residual_rmsnorm",
-    "fused_residual_rmsnorm_dropout",
-    "fused_add_rmsnorm_inplace",
-    "FusedResidualRMSNorm",
-]
-
 
 def get_optimization_info() -> dict:
-    """Get information about available optimizations."""
+    """Summarize available CUDA optimizations."""
     return {
         "triton_available": HAS_TRITON,
         "optimizations": {
@@ -147,10 +47,14 @@ def get_optimization_info() -> dict:
                 "speedup": "10-15%",
                 "available": HAS_TRITON,
             },
+            "fused_mu_qkv": {
+                "description": "Fused Mu-guided K/Q/V projection",
+                "speedup": "~2x vs 6 separate matmuls",
+                "available": HAS_TRITON,
+            },
             "int8_quantization": {
                 "description": "INT8 quantization with fused GEMM",
-                "speedup": "40-50% throughput",
-                "memory_reduction": "50%",
+                "speedup": "40-50% throughput, 50% memory",
                 "available": HAS_TRITON,
             },
             "fused_residual": {
@@ -158,5 +62,8 @@ def get_optimization_info() -> dict:
                 "speedup": "5-10%",
                 "available": HAS_TRITON,
             },
-        }
+        },
     }
+
+
+__all__ = ["HAS_TRITON", "get_optimization_info"]

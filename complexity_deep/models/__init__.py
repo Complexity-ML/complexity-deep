@@ -1,15 +1,17 @@
 """
-Complexity Concept Model Classes
-================================
+Complexity Model Classes
+========================
 """
 
-from complexity_deep.models.config import ComplexityConfig
-from complexity_deep.models.modeling import ComplexityModel, ComplexityForCausalLM
-from complexity_deep.models.utils import create_complexity_model
+from .config import ComplexityConfig
+from .modeling import ComplexityModel, CausalLMOutput, ModelOutput
+from .utils import create_complexity_model, count_parameters
 
 __all__ = [
     "ComplexityConfig",
     "ComplexityModel",
-    "ComplexityForCausalLM",
+    "CausalLMOutput",
+    "ModelOutput",
     "create_complexity_model",
+    "count_parameters",
 ]

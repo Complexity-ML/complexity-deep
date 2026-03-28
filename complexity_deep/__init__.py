@@ -1,73 +1,54 @@
 """
-Complexity Deep - Llama + Full INL Dynamics (Robotics)
-======================================================
+Complexity Framework — Supplementary Code for TMLR Submission
+=============================================================
 
-Multicouche architecture with robotics-grade control.
-
-Each layer has 3 components:
-    1. KQV Attention (perception)
-    2. INL Dynamics (control with velocity tracking)
-    3. Token-Routed MLP (transformation)
-
-Features:
-- Full velocity tracking (smooth trajectories)
-- Adaptive controller (alpha, beta, gate)
-- Learnable equilibrium (mu)
-- Real-time robotics capable
+Reference implementation of the Complexity architecture:
+- Token-Routed MLP with Zipf-balanced routing and Shared Lexical Expert
+- Mu-Guidance: cross-layer contextual signal biasing K, Q, V in attention
+- GPT-style initialization with residual scaling
 
 Usage:
-    from complexity_deep import DeepConfig, DeepForCausalLM
+    from complexity import ComplexityConfig, ComplexityModel, create_complexity_model
 
-    config = DeepConfig.deep_base()
-    model = DeepForCausalLM(config)
+    # Quick start
+    model = create_complexity_model("150m")
+
+    # Custom config
+    config = ComplexityConfig(hidden_size=768, num_hidden_layers=12)
+    model = ComplexityModel(config)
 """
 
-from complexity_deep.core import (
+from .core import (
     RMSNorm,
     RotaryEmbedding,
     ComplexityAttention,
-    ComplexityMLP,
-    DeepDecoderLayer,
-    INLDynamics,
+    SwiGLU,
+    TokenRoutedMLP,
+    TransformerBlock,
+    MuGuidance,
 )
 
-from complexity_deep.core.safety import (
-    SafetyClamp,
-    SafetyConfig,
-    MultiDirectionSafetyClamp,
-    ContrastiveSafetyLoss,
-    install_safety_on_model,
-    remove_safety_from_model,
-    load_safety_directions,
+from .models import (
+    ComplexityConfig,
+    ComplexityModel,
+    create_complexity_model,
+    count_parameters,
 )
 
-from complexity_deep.models import (
-    ComplexityConfig as DeepConfig,
-    ComplexityModel as DeepModel,
-    ComplexityForCausalLM as DeepForCausalLM,
-    create_complexity_model as create_deep_model,
-)
+__version__ = "1.0.0"
 
-__version__ = "0.5.1"  # Safety update
 __all__ = [
     # Core
     "RMSNorm",
     "RotaryEmbedding",
     "ComplexityAttention",
-    "ComplexityMLP",
-    "DeepDecoderLayer",
-    "INLDynamics",
-    # Safety
-    "SafetyClamp",
-    "SafetyConfig",
-    "MultiDirectionSafetyClamp",
-    "ContrastiveSafetyLoss",
-    "install_safety_on_model",
-    "remove_safety_from_model",
-    "load_safety_directions",
+    "SwiGLU",
+    "TokenRoutedMLP",
+    "TransformerBlock",
+    "MuGuidance",
     # Models
-    "DeepConfig",
-    "DeepModel",
-    "DeepForCausalLM",
-    "create_deep_model",
+    "ComplexityConfig",
+    "ComplexityModel",
+    "create_complexity_model",
+    "count_parameters",
 ]

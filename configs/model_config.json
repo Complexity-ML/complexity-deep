@@ -1,0 +1,23 @@
+{
+  "vocab_size": 32000,
+  "hidden_size": 2048,
+  "intermediate_size": 8192,
+  "num_hidden_layers": 24,
+  "num_attention_heads": 16,
+  "num_key_value_heads": 4,
+  "max_position_embeddings": 4096,
+  "rope_theta": 10000.0,
+  "rms_norm_eps": 1e-6,
+  "attention_dropout": 0.0,
+  "hidden_act": "silu",
+  "tie_word_embeddings": true,
+  "use_token_routed_mlp": true,
+  "num_experts": 4,
+  "use_qk_norm": true,
+  "use_sdpa": true,
+  "dynamics_alpha": 0.9,
+  "dynamics_beta": 0.1,
+  "dynamics_gate": 0.5,
+  "dynamics_dt": 0.1,
+  "dynamics_controller_hidden": 64
+}

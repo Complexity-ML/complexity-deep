@@ -1,5 +1,11 @@
 """
-Normalization layers for Complexity architecture.
+RMSNorm — Root Mean Square Layer Normalization.
+
+Standard component used in Llama, Mistral, and the Complexity architecture.
+More efficient than LayerNorm: no mean subtraction, no bias.
+
+Reference:
+    Zhang & Sennrich (2019), "Root Mean Square Layer Normalization"
 """
 
 import torch
@@ -10,8 +16,9 @@ class RMSNorm(nn.Module):
     """
     Root Mean Square Layer Normalization.
 
-    More efficient than LayerNorm - no mean subtraction, no bias.
-    Used in Llama, Mistral, and other modern architectures.
+    Normalizes by the RMS of activations (no mean centering):
+        y = x / RMS(x) * weight
+    where RMS(x) = sqrt(mean(x^2) + eps).
     """
 
     def __init__(self, hidden_size: int, eps: float = 1e-6):
@@ -20,7 +27,6 @@ class RMSNorm(nn.Module):
         self.eps = eps
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # RMS = sqrt(mean(x^2))
         variance = x.pow(2).mean(-1, keepdim=True)
         x = x * torch.rsqrt(variance + self.eps)
         return self.weight * x

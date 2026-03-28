@@ -1,72 +1,69 @@
 """
-Complexity Deep Model Implementation.
+Complexity Model — complete decoder-only Transformer.
 
-Multicouche robotics architecture:
-- KQV Attention (perception)
-- INL Dynamics with velocity (control)
-- Token-Routed MLP (transformation)
+Architecture overview:
+    embed_tokens -> [TransformerBlock x N] -> norm -> lm_head
 
-Full velocity tracking for smooth, stable trajectories.
+Each TransformerBlock:
+    Attention(x, mu_prev) -> residual -> MLP(x, token_ids) -> residual -> mu
 
-Numerical Stability:
-    Multiple clamping mechanisms prevent NaN/inf explosions:
-    - velocity_state clamped to [-10, 10] in INLDynamics
-    - beta (correction gain) clamped to [0, 2] via softplus
-    - token_ids clamped to [0, vocab_size-1] for safe indexing
-    - Optional safety_clamp module for mu and hidden states
-    - probs clamped to min=1e-8 to avoid log(0) in sampling
+Key innovations:
+- mu_init: a learnable parameter that gives layer 0 a mu_prev (so even the
+  first layer benefits from Mu-Guidance).
+- GPT-style residual init: residual output projections (o_proj, down_proj)
+  are initialized with std = 0.02 / sqrt(2 * num_layers) to prevent the
+  residual stream from growing with depth.
+- Mu flows layer-to-layer with clamping to [-2, 2].
+
+Reference: Section 3 of the paper.
 """
 
+import json
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional, Tuple, List
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional, Tuple, List, Dict, Any
 
-from complexity_deep.core.normalization import RMSNorm
-from complexity_deep.core.layer import DeepDecoderLayer
-from complexity_deep.models.config import ComplexityConfig
+from ..core.normalization import RMSNorm
+from ..core.layer import TransformerBlock
+from .config import ComplexityConfig
 
-# Triton-accelerated fused mu residual - DISABLED for now (needs optimization)
-# The overhead of kernel launch > gain from fusion for simple ops
-HAS_FUSED_MU_RESIDUAL = False
 
+# ======================================================================
+# Output containers
+# ======================================================================
 
 @dataclass
-class DeepOutput:
-    """Output from DeepModel."""
-    last_hidden_state: torch.Tensor
-    last_velocity_state: torch.Tensor  # NEW: velocity for robotics
+class ModelOutput:
+    """Output from ComplexityModel."""
+    logits: Optional[torch.Tensor] = None
+    last_hidden_state: Optional[torch.Tensor] = None
     past_key_values: Optional[List[Tuple[torch.Tensor, torch.Tensor]]] = None
 
 
 @dataclass
 class CausalLMOutput:
-    """Output from DeepForCausalLM."""
+    """Output with optional loss."""
     loss: Optional[torch.Tensor] = None
-    logits: torch.Tensor = None
+    logits: Optional[torch.Tensor] = None
     past_key_values: Optional[List[Tuple[torch.Tensor, torch.Tensor]]] = None
-    velocity_state: Optional[torch.Tensor] = None  # NEW: for robotics
 
 
-class DeepModel(nn.Module):
+# ======================================================================
+# Model
+# ======================================================================
+
+class ComplexityModel(nn.Module):
     """
-    Complexity Deep transformer model (decoder-only).
+    Complexity Transformer (decoder-only).
 
-    Multicouche architecture per layer:
-        1. Mu-Guided Attention (perception with top-down guidance)
-        2. INL Dynamics (control with velocity)
-        3. Token-Routed MLP (transformation)
-
-    INL Innovation (2025):
-        - mu from layer N guides attention in layer N+1
-        - Creates bidirectional flow: attention -> dynamics -> attention
-        - Velocity is tracked across all layers for smooth trajectories
-
-    Stability:
-        - Velocity clamped to [-10, 10] per layer (prevents runaway dynamics)
-        - Mu residual accumulates across layers (can grow) - use safety_clamp if needed
-        - All intermediate values use bf16/fp16 safe ranges
+    Mu-Guidance flow:
+        mu_prev = mu_init.expand(B, S, H)     # learnable starting mu
+        for layer in layers:
+            x, kv, mu = layer(x, ..., mu_prev=mu_prev)
+            mu_prev = clamp(mu, -2, 2)         # prevent feedback explosion
     """
 
     def __init__(self, config: ComplexityConfig):
@@ -76,9 +73,9 @@ class DeepModel(nn.Module):
         # Token embeddings
         self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size)
 
-        # Transformer layers with full dynamics
+        # Transformer layers
         self.layers = nn.ModuleList([
-            DeepDecoderLayer(
+            TransformerBlock(
                 hidden_size=config.hidden_size,
                 intermediate_size=config.intermediate_size,
                 num_attention_heads=config.num_attention_heads,
@@ -87,137 +84,73 @@ class DeepModel(nn.Module):
                 rms_norm_eps=config.rms_norm_eps,
                 rope_theta=config.rope_theta,
                 attention_dropout=config.attention_dropout,
-                hidden_act=config.hidden_act,
-                # Token-Routed MLP params
                 use_token_routed_mlp=config.use_token_routed_mlp,
                 num_experts=config.num_experts,
                 vocab_size=config.vocab_size,
-                # 2024 innovations
+                shared_expert=config.shared_expert,
                 use_qk_norm=config.use_qk_norm,
-                sliding_window=config.sliding_window,
-                use_sdpa=config.use_sdpa,
-                # INL Dynamics params
-                dynamics_alpha=getattr(config, 'dynamics_alpha', 0.9),
-                dynamics_beta=getattr(config, 'dynamics_beta', 0.1),
-                dynamics_gate=getattr(config, 'dynamics_gate', 0.5),
-                dynamics_dt=getattr(config, 'dynamics_dt', 0.1),
-                dynamics_controller_hidden=getattr(config, 'dynamics_controller_hidden', 64),
+                use_mu_guidance=config.use_mu_guidance,
             )
             for _ in range(config.num_hidden_layers)
         ])
 
-        # Final normalization
+        # Final norm
         self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-
-    def forward(
-        self,
-        input_ids: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
-        past_key_values: Optional[List[Tuple[torch.Tensor, torch.Tensor]]] = None,
-        velocity_state: Optional[torch.Tensor] = None,  # NEW: initial velocity
-        use_cache: bool = False,
-    ) -> DeepOutput:
-        """
-        Forward pass with velocity tracking.
-
-        Args:
-            input_ids: [batch, seq_len]
-            attention_mask: Optional attention mask
-            past_key_values: Optional cached KV for generation
-            velocity_state: Optional initial velocity [batch, seq_len, hidden_size]
-            use_cache: Whether to return KV cache
-
-        Returns:
-            DeepOutput with hidden states, velocity states, and optional KV cache
-        """
-        batch_size, seq_len = input_ids.shape
-
-        # Embed tokens
-        hidden_states = self.embed_tokens(input_ids)
-
-        # Initialize velocity if not provided
-        if velocity_state is None:
-            velocity_state = torch.zeros_like(hidden_states)
-
-        # Process through layers with mu propagation
-        # mu from layer N guides attention in layer N+1 (top-down flow)
-        # INL 2025: Mu residual - accumulate mu across layers (mu highway)
-        new_past_key_values = [] if use_cache else None
-        mu_prev = None  # First layer has no mu guidance
-        mu_residual = None  # Accumulated mu across all layers
-
-        for idx, layer in enumerate(self.layers):
-            past_kv = past_key_values[idx] if past_key_values is not None else None
-
-            hidden_states, velocity_state, mu_current, new_past_kv = layer(
-                hidden_states,
-                velocity_states=velocity_state,
-                attention_mask=attention_mask,
-                past_key_value=past_kv,
-                use_cache=use_cache,
-                token_ids=input_ids,
-                mu_prev=mu_prev,  # INL: pass mu from previous layer
-            )
-
-            # INL 2025: Mu residual highway (v0.12.0: inplace optimized)
-            # Accumulate mu across layers for richer context propagation
-            # Using inplace ops (add_) saves memory allocations
-            if mu_residual is None:
-                mu_residual = mu_current.clone()
-                mu_prev = mu_current + 0.1 * mu_residual
-            else:
-                # v0.12.0: Inplace update - saves 1 allocation per layer
-                mu_residual.add_(mu_current)  # mu_residual += mu_current
-                mu_prev = mu_current + 0.1 * mu_residual
-
-            if use_cache:
-                new_past_key_values.append(new_past_kv)
-
-        # Final normalization
-        hidden_states = self.norm(hidden_states)
-
-        return DeepOutput(
-            last_hidden_state=hidden_states,
-            last_velocity_state=velocity_state,
-            past_key_values=new_past_key_values,
-        )
-
-
-class DeepForCausalLM(nn.Module):
-    """
-    Complexity Deep model with language modeling head.
-
-    For causal language modeling with robotics-grade control:
-    - Smooth token generation (velocity tracking)
-    - Stable convergence (adaptive alpha/beta/gate)
-    - Real-time capable
-    """
-
-    def __init__(self, config: ComplexityConfig):
-        super().__init__()
-        self.config = config
-
-        # Base model
-        self.model = DeepModel(config)
 
         # LM head
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
-
-        # Tie weights
         if config.tie_word_embeddings:
-            self.lm_head.weight = self.model.embed_tokens.weight
+            self.lm_head.weight = self.embed_tokens.weight
+
+        # Learnable mu_init: provides mu_prev for layer 0
+        if config.use_mu_guidance:
+            self.mu_init = nn.Parameter(torch.zeros(1, 1, config.hidden_size))
 
         # Initialize weights
         self.apply(self._init_weights)
+        self._init_residual_scaling()
+
+    # ------------------------------------------------------------------
+    # Weight initialization
+    # ------------------------------------------------------------------
 
     def _init_weights(self, module: nn.Module):
-        """Initialize weights."""
+        """Standard init: normal_(std=0.02) for Linear and Embedding."""
+        std = self.config.initializer_range
         if isinstance(module, nn.Linear):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=self.config.initializer_range)
+            nn.init.normal_(module.weight, mean=0.0, std=std)
             if module.bias is not None:
-                torch.nn.init.zeros_(module.bias)
+                nn.init.zeros_(module.bias)
         elif isinstance(module, nn.Embedding):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=self.config.initializer_range)
+            nn.init.normal_(module.weight, mean=0.0, std=std)
+
+    def _init_residual_scaling(self):
+        """
+        GPT-style residual init: scale output projections by 1/sqrt(2N).
+
+        Targets: o_proj (attention output) and down_proj* (MLP output).
+        Prevents the residual stream from growing with depth.
+        Ref: Radford et al. (2019), "Language Models are Unsupervised Multitask Learners"
+        """
+        n = self.config.num_hidden_layers
+        residual_std = self.config.initializer_range / (2 * n) ** 0.5
+        for layer in self.layers:
+            # Attention output
+            if hasattr(layer.self_attn, 'o_proj'):
+                nn.init.normal_(layer.self_attn.o_proj.weight, mean=0.0, std=residual_std)
+            # MLP down projection (nn.Parameter for TokenRoutedMLP)
+            mlp = layer.mlp
+            if hasattr(mlp, 'down_proj_w') and isinstance(mlp.down_proj_w, nn.Parameter):
+                nn.init.normal_(mlp.down_proj_w, mean=0.0, std=residual_std)
+            elif hasattr(mlp, 'down_proj') and isinstance(mlp.down_proj, nn.Linear):
+                nn.init.normal_(mlp.down_proj.weight, mean=0.0, std=residual_std)
+            # Shared expert down projection
+            if hasattr(mlp, 'shared_down') and isinstance(mlp.shared_down, nn.Linear):
+                nn.init.normal_(mlp.shared_down.weight, mean=0.0, std=residual_std)
+
+    # ------------------------------------------------------------------
+    # Forward
+    # ------------------------------------------------------------------
 
     def forward(
         self,
@@ -225,37 +158,54 @@ class DeepForCausalLM(nn.Module):
         attention_mask: Optional[torch.Tensor] = None,
         labels: Optional[torch.Tensor] = None,
         past_key_values: Optional[List[Tuple[torch.Tensor, torch.Tensor]]] = None,
-        velocity_state: Optional[torch.Tensor] = None,
         use_cache: bool = False,
-        **kwargs,
     ) -> CausalLMOutput:
         """
         Forward pass.
 
         Args:
-            input_ids: [batch, seq_len]
-            attention_mask: Optional attention mask
-            labels: Optional labels for loss computation
-            past_key_values: Optional cached KV
-            velocity_state: Optional velocity for continuous generation
-            use_cache: Whether to return KV cache
+            input_ids:       [B, S] token IDs
+            attention_mask:  optional mask
+            labels:          [B, S] target IDs for CE loss (shifted internally)
+            past_key_values: KV caches for generation
+            use_cache:       return updated caches
 
         Returns:
-            CausalLMOutput with loss, logits, KV cache, and velocity
+            CausalLMOutput with loss (if labels), logits, and optional caches
         """
-        # Forward through base model
-        outputs = self.model(
-            input_ids,
-            attention_mask=attention_mask,
-            past_key_values=past_key_values,
-            velocity_state=velocity_state,
-            use_cache=use_cache,
-        )
+        B, S = input_ids.shape
+        hidden_states = self.embed_tokens(input_ids)
 
-        # Compute logits
-        logits = self.lm_head(outputs.last_hidden_state)
+        # Mu-Guidance: learnable starting mu for layer 0
+        mu_prev = None
+        if self.config.use_mu_guidance:
+            mu_prev = self.mu_init.expand(B, S, -1)
 
-        # Compute loss if labels provided
+        new_kvs = [] if use_cache else None
+
+        for i, layer in enumerate(self.layers):
+            past_kv = past_key_values[i] if past_key_values is not None else None
+
+            hidden_states, new_kv, mu_contextual = layer(
+                hidden_states,
+                attention_mask=attention_mask,
+                past_key_value=past_kv,
+                use_cache=use_cache,
+                token_ids=input_ids,
+                mu_prev=mu_prev,
+            )
+
+            # Propagate mu to next layer (clamped to prevent explosion)
+            if mu_contextual is not None:
+                mu_prev = torch.clamp(mu_contextual, -2.0, 2.0)
+
+            if use_cache:
+                new_kvs.append(new_kv)
+
+        hidden_states = self.norm(hidden_states)
+        logits = self.lm_head(hidden_states)
+
+        # Compute loss
         loss = None
         if labels is not None:
             shift_logits = logits[..., :-1, :].contiguous()
@@ -266,12 +216,11 @@ class DeepForCausalLM(nn.Module):
                 ignore_index=-100,
             )
 
-        return CausalLMOutput(
-            loss=loss,
-            logits=logits,
-            past_key_values=outputs.past_key_values,
-            velocity_state=outputs.last_velocity_state,
-        )
+        return CausalLMOutput(loss=loss, logits=logits, past_key_values=new_kvs)
+
+    # ------------------------------------------------------------------
+    # Generation
+    # ------------------------------------------------------------------
 
     @torch.no_grad()
     def generate(
@@ -283,154 +232,87 @@ class DeepForCausalLM(nn.Module):
         top_p: float = 0.9,
         do_sample: bool = True,
         eos_token_id: Optional[int] = None,
-        # INL Dynamics for inference (PID with mu) - generation only, doesn't affect checkpoint
-        use_dynamics: bool = True,
-        dynamics_strength: float = 0.1,
-        dynamics_alpha: float = 0.9,   # Inertia (momentum) - ignored, uses model's velocity
-        dynamics_beta: float = 0.1,    # Correction - ignored, uses model's velocity
     ) -> torch.Tensor:
         """
-        Generate tokens with velocity tracking for smooth trajectories.
-
-        Note: dynamics_alpha/beta are accepted for API compatibility with pyllm-server
-        but complexity-deep uses its own trained velocity state from the model layers.
-        The velocity_state from forward() already incorporates the learned dynamics.
+        Autoregressive text generation with KV-cache.
 
         Args:
-            use_dynamics: If True, use velocity state to influence token sampling.
-            dynamics_strength: Strength of velocity influence on logits (0-1).
-            dynamics_alpha: Ignored (for API compat) - model uses trained dynamics.
-            dynamics_beta: Ignored (for API compat) - model uses trained dynamics.
+            input_ids:      [B, S] prompt token IDs
+            max_new_tokens: maximum tokens to generate
+            temperature:    sampling temperature
+            top_k:          top-k filtering (0 = off)
+            top_p:          nucleus sampling threshold
+            do_sample:      sample vs. greedy
+            eos_token_id:   stop token
+
+        Returns:
+            [B, S + generated] token IDs
         """
         if eos_token_id is None:
             eos_token_id = self.config.eos_token_id
 
         past_key_values = None
-        velocity_state = None  # Track velocity across generation
 
         for _ in range(max_new_tokens):
-            if past_key_values is not None:
-                curr_input_ids = input_ids[:, -1:]
-                # For cached generation, only use last velocity
-                if velocity_state is not None:
-                    velocity_state = velocity_state[:, -1:, :]
-            else:
-                curr_input_ids = input_ids
+            # Use only the last token when we have a cache
+            curr = input_ids[:, -1:] if past_key_values is not None else input_ids
 
-            outputs = self.forward(
-                curr_input_ids,
-                past_key_values=past_key_values,
-                velocity_state=velocity_state,
-                use_cache=True,
-            )
+            out = self.forward(curr, past_key_values=past_key_values, use_cache=True)
+            past_key_values = out.past_key_values
+            logits = out.logits[:, -1, :] / temperature
 
-            past_key_values = outputs.past_key_values
-            velocity_state = outputs.velocity_state
-
-            # Save raw logits BEFORE any modifications for fallback
-            raw_logits = outputs.logits[:, -1, :].clone()
-            logits = raw_logits / temperature
-
-            # NEW: Velocity-aware sampling (INL Dynamics for inference)
-            # Use velocity to bias towards tokens "in the direction of motion"
-            if use_dynamics and velocity_state is not None and dynamics_strength > 0:
-                # Project velocity through lm_head to get "velocity in token space"
-                # This tells us which tokens the model is "moving towards"
-                velocity_logits = self.lm_head(velocity_state[:, -1, :])
-                # Normalize and apply as soft bias
-                velocity_bias = torch.tanh(velocity_logits) * dynamics_strength
-                logits = logits + velocity_bias
-
-            # Apply top-k
+            # Top-k
             if top_k > 0:
-                indices_to_remove = logits < torch.topk(logits, top_k)[0][..., -1, None]
-                logits[indices_to_remove] = float("-inf")
+                cutoff = torch.topk(logits, top_k)[0][..., -1, None]
+                logits[logits < cutoff] = float("-inf")
 
-            # Apply top-p
+            # Top-p
             if top_p < 1.0:
-                sorted_logits, sorted_indices = torch.sort(logits, descending=True)
-                cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
-                sorted_indices_to_remove = cumulative_probs > top_p
-                sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
-                sorted_indices_to_remove[..., 0] = 0
-                indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
+                sorted_logits, sorted_idx = torch.sort(logits, descending=True)
+                cum_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+                remove = cum_probs > top_p
+                remove[..., 1:] = remove[..., :-1].clone()
+                remove[..., 0] = False
+                indices_to_remove = remove.scatter(1, sorted_idx, remove)
                 logits[indices_to_remove] = float("-inf")
 
-            # Sample or greedy with NaN/Inf protection
+            # Sample or greedy
             if do_sample:
-                # Check for invalid logits
-                valid_logits = logits[logits != float('-inf')]
-                if valid_logits.numel() == 0 or torch.isnan(logits).any() or torch.isinf(logits).all():
-                    # Fallback to greedy on RAW logits (not filtered)
-                    next_token = torch.argmax(raw_logits, dim=-1, keepdim=True)
-                else:
-                    probs = F.softmax(logits, dim=-1)
-                    # Clamp to avoid numerical issues
-                    probs = torch.clamp(probs, min=1e-8)
-                    probs = probs / probs.sum(dim=-1, keepdim=True)
-                    next_token = torch.multinomial(probs, num_samples=1)
+                probs = F.softmax(logits, dim=-1)
+                next_token = torch.multinomial(probs, num_samples=1)
             else:
-                next_token = torch.argmax(raw_logits, dim=-1, keepdim=True)
+                next_token = logits.argmax(dim=-1, keepdim=True)
 
             input_ids = torch.cat([input_ids, next_token], dim=-1)
-
             if (next_token == eos_token_id).all():
                 break
 
         return input_ids
 
+    # ------------------------------------------------------------------
+    # Utilities
+    # ------------------------------------------------------------------
+
     def num_parameters(self, trainable_only: bool = True) -> int:
-        """Count model parameters."""
         if trainable_only:
             return sum(p.numel() for p in self.parameters() if p.requires_grad)
         return sum(p.numel() for p in self.parameters())
 
-    def save_pretrained(self, save_path: str):
-        """Save model and config."""
-        import json
-        from pathlib import Path
-
-        path = Path(save_path)
-        path.mkdir(parents=True, exist_ok=True)
-
-        with open(path / "config.json", "w") as f:
+    def save_pretrained(self, path: str):
+        """Save model weights and config to a directory."""
+        p = Path(path)
+        p.mkdir(parents=True, exist_ok=True)
+        with open(p / "config.json", "w") as f:
             json.dump(self.config.to_dict(), f, indent=2)
-
-        torch.save(self.state_dict(), path / "model.pt")
+        torch.save(self.state_dict(), p / "model.pt")
 
     @classmethod
-    def from_pretrained(cls, load_path: str, device: str = "cpu") -> "DeepForCausalLM":
-        """Load model from checkpoint."""
-        import json
-        from pathlib import Path
-
-        path = Path(load_path)
-
-        with open(path / "config.json", "r") as f:
-            config_dict = json.load(f)
-        config = ComplexityConfig.from_dict(config_dict)
-
+    def from_pretrained(cls, path: str, device: str = "cpu") -> "ComplexityModel":
+        """Load model from a directory containing config.json and model.pt."""
+        p = Path(path)
+        with open(p / "config.json") as f:
+            config = ComplexityConfig.from_dict(json.load(f))
         model = cls(config)
-
-        # Try safetensors first, then .pt
-        safetensors_path = path / "model.safetensors"
-        pt_path = path / "model.pt"
-
-        if safetensors_path.exists():
-            from safetensors.torch import load_file
-            state_dict = load_file(str(safetensors_path), device=device)
-        elif pt_path.exists():
-            state_dict = torch.load(pt_path, map_location=device)
-        else:
-            raise FileNotFoundError(f"No model weights found in {path}. Expected model.safetensors or model.pt")
-
-        model.load_state_dict(state_dict)
-        model = model.to(device)
-
-        return model
-
-
-# Backward compatibility aliases
-ComplexityModel = DeepModel
-ComplexityForCausalLM = DeepForCausalLM
-ComplexityOutput = DeepOutput
+        weights = torch.load(p / "model.pt", map_location=device)
+        model.load_state_dict(weights, strict=False)
+        return model.to(device)
