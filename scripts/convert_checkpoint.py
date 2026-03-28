@@ -147,8 +147,8 @@ def save_config(config: dict, output_dir: str, chat_template: str = None, quanti
         "use_qk_norm": config.get("use_qk_norm", True),
         "use_sdpa": config.get("use_sdpa", True),
 
-        "dynamics_dt": config.get("dynamics_dt", 0.1),
-        "dynamics_controller_hidden": config.get("dynamics_controller_hidden", 64),
+        "shared_expert": config.get("shared_expert", True),
+        "use_mu_guidance": config.get("use_mu_guidance", True),
 
         "torch_dtype": "float16",
     }

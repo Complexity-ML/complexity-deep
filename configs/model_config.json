@@ -15,9 +15,6 @@
   "num_experts": 4,
   "use_qk_norm": true,
   "use_sdpa": true,
-  "dynamics_alpha": 0.9,
-  "dynamics_beta": 0.1,
-  "dynamics_gate": 0.5,
-  "dynamics_dt": 0.1,
-  "dynamics_controller_hidden": 64
+  "shared_expert": true,
+  "use_mu_guidance": true
 }

@@ -34,18 +34,28 @@ This repository contains the source code for the COMPLEXITY-DEEP architecture de
 
 ## Key Components
 
-### Token-Routed MLP
-Deterministic routing via `expert_idx = token_id % num_experts`. No load balancing loss required.
+### Token-Routed MLP (Deterministic MoE)
+
+Tokens are routed to experts via Zipf-balanced bin-packing:
+
+```python
+expert_id = BinPack(token_id, frequencies)  # greedy bin-packing
+output = SharedMLP(x) + Expert_e(x)         # shared + specialized
+```
+
+A shared lexical expert processes ALL tokens (universal patterns), while routed experts specialize on their lexical subsets.
 
 ### Mu-Guided Attention
-Latent state μ from previous layer guides K, Q, V projections, creating bidirectional information flow.
 
-### INL Dynamics
-PiD-style dynamic controller for training stability through adaptive scaling:
-- α (alpha): Inertia/momentum
-- β (beta): Error correction strength
-- gate: Amplitude control
-- μ (mu): Learnable equilibrium point
+A learnable latent state mu flows between layers, biasing K, Q, V projections:
+
+```python
+K = x @ W_K + mu_prev @ W_muK
+Q = x @ W_Q + mu_prev @ W_muQ
+V = x @ W_V + mu_prev @ W_muV
+```
+
+mu is produced after expert dispatch (MuGuidance module), so the next layer's attention adapts based on which expert processed each token.
 
 ## Requirements
 

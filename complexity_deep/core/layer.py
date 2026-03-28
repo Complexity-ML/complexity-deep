@@ -12,7 +12,6 @@ Architecture (Pre-Norm, three phases per layer):
 mu from layer L is passed as mu_prev to layer L+1's attention, creating a
 cross-layer top-down signal (Section 3.3 of the paper).
 
-Note: there is NO PiD controller, NO velocity state, NO INLDynamics.
 Mu-Guidance is a simple learnable projection, not a dynamical system.
 """
 

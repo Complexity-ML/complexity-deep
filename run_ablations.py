@@ -5,7 +5,6 @@ Evaluates model performance with each component disabled:
 1. Full model (baseline)
 2. Without Mu-Guidance (zero mu influence on attention)
 3. Without Token-Routing (single expert for all tokens)
-4. Without PiD Controller (fixed alpha/beta/gate)
 
 Uses the EXACT same evaluation format as run_benchmarks.py for comparable results.
 
@@ -98,33 +97,6 @@ def ablate_token_routing(model):
         logging.info(f"  [Ablation] Restored token routing")
 
 
-@contextmanager
-def ablate_pid_controller(model):
-    """Disable PiD Controller: fix alpha, beta, gate to default values."""
-    saved_weights = {}
-
-    for name, module in model.named_modules():
-        if hasattr(module, 'controller_in') and hasattr(module, 'controller_out'):
-            saved_weights[f"{name}.controller_in.weight"] = module.controller_in.weight.data.clone()
-            saved_weights[f"{name}.controller_in.bias"] = module.controller_in.bias.data.clone()
-            saved_weights[f"{name}.controller_out.weight"] = module.controller_out.weight.data.clone()
-            saved_weights[f"{name}.controller_out.bias"] = module.controller_out.bias.data.clone()
-            module.controller_in.weight.data.zero_()
-            module.controller_in.bias.data.zero_()
-
-    logging.info(f"  [Ablation] Fixed {len(saved_weights)//4} PiD controllers to constant output")
-    try:
-        yield
-    finally:
-        for name, module in model.named_modules():
-            if hasattr(module, 'controller_in') and f"{name}.controller_in.weight" in saved_weights:
-                module.controller_in.weight.data.copy_(saved_weights[f"{name}.controller_in.weight"])
-                module.controller_in.bias.data.copy_(saved_weights[f"{name}.controller_in.bias"])
-                module.controller_out.weight.data.copy_(saved_weights[f"{name}.controller_out.weight"])
-                module.controller_out.bias.data.copy_(saved_weights[f"{name}.controller_out.bias"])
-        logging.info(f"  [Ablation] Restored PiD controllers")
-
-
 # ============================================================================
 # Run benchmarks (reuses run_benchmarks.py functions)
 # ============================================================================
@@ -172,30 +144,23 @@ def main():
 
     # 1. Full model (baseline)
     print("\n" + "=" * 60)
-    print("[1/4] FULL MODEL (baseline)")
+    print("[1/3] FULL MODEL (baseline)")
     print("=" * 60)
     all_results["full_model"] = run_all_benchmarks(model, tokenizer, args.device, args.max_samples)
 
     # 2. Without Mu-Guidance
     print("\n" + "=" * 60)
-    print("[2/4] WITHOUT MU-GUIDANCE")
+    print("[2/3] WITHOUT MU-GUIDANCE")
     print("=" * 60)
     with ablate_mu_guidance(model):
         all_results["no_mu_guidance"] = run_all_benchmarks(model, tokenizer, args.device, args.max_samples)
 
     # 3. Without Token-Routing
     print("\n" + "=" * 60)
-    print("[3/4] WITHOUT TOKEN-ROUTING (single expert)")
+    print("[3/3] WITHOUT TOKEN-ROUTING (single expert)")
     print("=" * 60)
     with ablate_token_routing(model):
         all_results["no_token_routing"] = run_all_benchmarks(model, tokenizer, args.device, args.max_samples)
-
-    # 4. Without PiD Controller
-    print("\n" + "=" * 60)
-    print("[4/4] WITHOUT PID CONTROLLER")
-    print("=" * 60)
-    with ablate_pid_controller(model):
-        all_results["no_pid_controller"] = run_all_benchmarks(model, tokenizer, args.device, args.max_samples)
 
     # ========================================================================
     # Summary table
@@ -209,7 +174,6 @@ def main():
         ("Full Model", "full_model"),
         ("No Mu-Guidance", "no_mu_guidance"),
         ("No Token-Routing", "no_token_routing"),
-        ("No PiD Controller", "no_pid_controller"),
     ]
 
     # Header

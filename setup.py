@@ -44,5 +44,5 @@ setup(
         "Programming Language :: Python :: 3.11",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
     ],
-    keywords="llm transformer dynamics robotics llama pytorch deep-learning velocity-control",
+    keywords="llm transformer token-routing mu-guidance llama pytorch deep-learning moe",
 )

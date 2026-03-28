@@ -1,200 +1,112 @@
 # Complexity Deep
 
-Complexity architecture with **INL Dynamics** for robotics-grade control.
+LLM architecture with **Token-Routed MLP**, **Mu-Guided Attention**, and **Shared Lexical Expert**.
 
-[![PyPI version](https://badge.fury.io/py/complexity-deep.svg)](https://badge.fury.io/py/complexity-deep)
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18293026.svg)](https://doi.org/10.5281/zenodo.18293026)
-
-## Installation
-
-```bash
-pip install complexity-deep
-```
-
-## What's Different from Complexity?
-
-Complexity Deep adds **INL Dynamics** - a robotics-inspired control layer:
-
-```
-Input -> [Attention -> MLP -> Dynamics] x N -> Output
-```
-
-The Dynamics layer provides:
-- **Velocity tracking** - smooth trajectories
-- **Learnable equilibrium (mu)** - stable attractors
-- **Adaptive control** - alpha, beta, gate parameters
 
 ## Architecture
 
 Each layer has 3 components:
 
-1. **KQV Attention** (perception) - what tokens to attend to
-2. **Token-Routed MLP** (transformation) - deterministic expert routing
-3. **INL Dynamics** (control) - trajectory smoothing
-
-### Token-Routed MLP (Deterministic MoE)
-
-Unlike learned routing (Mixtral, DeepSeek), we route tokens to experts using a simple formula:
-
-```python
-expert_id = token_id % num_experts
+```
+Input
+  |
+  v
+[RMSNorm] -> [Mu-Guided GQA] -> residual -> [RMSNorm] -> [Token-Routed MLP + Shared Expert] -> residual
+                  ^                                                |
+                  |                                                v
+             mu_prev                                         MuGuidance(h_post_mlp)
+        (from previous layer)                                      |
+                                                              mu_contextual
+                                                          (to next layer)
 ```
 
-**Benefits:**
-- **Uniform distribution**: Each expert receives exactly 25% of tokens
-- **No expert collapse**: Frequent tokens spread across all experts
-- **Zero routing parameters**: No router network to learn
-- **Zero load balancing loss**: Perfectly balanced by design
-- **100% deterministic and parallelizable**
+### 1. Token-Routed MLP (Deterministic MoE)
 
-### INL Dynamics Equations
+Tokens are routed to experts based on their token ID, not learned softmax routing:
 
 ```python
-mu_contextual = mu_base + mu_proj(h)  # contextual equilibrium (NEW!)
-error = h - mu_contextual             # deviation from equilibrium
-v_next = alpha * v - beta * error     # velocity update (momentum + correction)
-h_next = h + dt * gate * v_next       # position update
+expert_id = BinPack(token_id, frequencies)  # greedy bin-packing
+output = SharedMLP(x) + Expert_e(x)         # shared + specialized
 ```
 
-Where:
-- `h` = hidden state
-- `v` = velocity (momentum)
-- `mu_base` = global learnable equilibrium point
-- `mu_proj` = context-dependent equilibrium adjustment (adapts per token)
-- `alpha` = inertia (0.9 default)
-- `beta` = correction strength (0.1 default)
-- `gate` = amplitude control
-- `dt` = integration timestep
+**Zipf-balanced greedy bin-packing**: tokens sorted by corpus frequency are assigned to the expert with the lowest accumulated load. Achieves **perfect 1.0000x load balance** (vs 1.38x with round-robin).
 
-**Contextual Mu**: Unlike a fixed equilibrium, the contextual mu adapts to each token's hidden state. This allows different tokens (code vs text vs math) to have different attractors, improving model expressivity.
+**Shared Lexical Expert**: a dense SwiGLU MLP that ALL tokens pass through, capturing universal patterns (syntax, grammar). Routed experts specialize on their lexical subsets.
+
+**Sparse dispatch**: only routed tokens are computed per expert (no masked waste).
+
+### 2. Mu-Guided Attention
+
+A learnable latent state mu flows between layers, biasing K, Q, V projections:
+
+```python
+K = x @ W_K + mu_prev @ W_muK
+Q = x @ W_Q + mu_prev @ W_muQ
+V = x @ W_V + mu_prev @ W_muV
+```
+
+**mu_init**: learnable parameter for layer 0 (initialized to zero), so the first layer also benefits from guidance.
+
+**mu after MLP**: mu is produced after expert dispatch, capturing which expert processed each token. The next layer adapts its attention accordingly.
+
+```python
+mu_contextual = clamp(mu_param) + mu_proj(h_post_mlp)
+```
+
+### 3. Training Recipe
+
+- **Dynamic warmup**: 5% of total steps (not hardcoded)
+- **GPT-style init**: residual projections scaled by 1/sqrt(2*num_layers)
+- **AdamW**: betas=(0.9, 0.95), weight_decay=0.1, grad_clip=1.0
+- **Cosine scheduler**: min_lr = 10% of peak
+- **BF16 precision**
 
 ## Usage
 
 ```python
-from complexity_deep import DeepConfig, DeepForCausalLM, create_deep_model
+from complexity_deep.models import ComplexityConfig, ComplexityModel
 
-# Create model by size
-model = create_deep_model("base")  # ~125M params
-
-# Or with custom config
-config = DeepConfig(
+config = ComplexityConfig(
     hidden_size=768,
-    num_hidden_layers=12,
+    num_hidden_layers=18,
     num_attention_heads=12,
     num_key_value_heads=4,
-    use_token_routed_mlp=True,
+    intermediate_size=2048,
     num_experts=4,
-    use_qk_norm=True,
-    # INL Dynamics parameters
-    dynamics_alpha=0.9,
-    dynamics_beta=0.1,
-    dynamics_gate=0.5,
-    dynamics_dt=0.1,
+    shared_expert=True,
+    use_mu_guidance=True,
 )
-model = DeepForCausalLM(config)
+model = ComplexityModel(config)
 
-# Forward pass
-outputs = model(input_ids, labels=labels)
-loss = outputs.loss
+# Forward
+outputs = model(input_ids)
+logits = outputs["logits"]
+
+# Generate
+output_ids = model.generate(input_ids, max_new_tokens=100)
 ```
 
-## Model Sizes
+## Key Results
 
-| Size | Params | Hidden | Layers | Experts |
-|------|--------|--------|--------|---------|
-| tiny | ~15M | 256 | 6 | 4 |
-| 20m | ~20M | 320 | 8 | 4 |
-| small | ~50M | 512 | 8 | 4 |
-| 150m | ~150M | 768 | 12 | 4 |
-| base | ~125M | 768 | 12 | 4 |
-| medium | ~350M | 1024 | 24 | 4 |
-| large | ~760M | 1536 | 24 | 4 |
-| 1b | ~1B | 2048 | 24 | 4 |
-| 3b | ~3B | 2560 | 32 | 4 |
+At iso-param (~170M), the Token-Routed architecture converges faster than the dense baseline (avg loss 4.79 vs 4.91 over 954 steps on 500M tokens). Each expert achieves functional specialization measured by per-expert perplexity.
 
-## Why Dynamics?
+## Links
 
-The INL Dynamics layer is inspired by robotics control theory:
-
-1. **Smooth Trajectories** - The velocity tracking prevents sudden jumps in hidden states
-2. **Contextual Attractors** - The contextual mu adapts equilibrium per token type
-3. **Momentum** - Alpha parameter allows the model to maintain momentum
-4. **Error Correction** - Beta parameter provides corrective feedback
-
-This is particularly useful for:
-- Generating coherent long sequences
-- Maintaining consistency in outputs
-- Smooth interpolation in latent space
-- **Different behaviors for different content types** (code, text, math)
-
-### Training Note
-
-When training, exclude `mu` (the base equilibrium) from weight decay to allow it to learn freely:
-
-```python
-# In optimizer setup
-if 'bias' in name or 'norm' in name or ('.mu' in name and 'mu_proj' not in name):
-    no_decay_params.append(param)  # No weight decay for mu_base
-else:
-    decay_params.append(param)     # mu_proj.weight gets normal decay
-```
-
-## CUDA Optimizations
-
-```python
-from complexity_deep.cuda import (
-    HAS_TRITON,
-    get_optimization_info,
-    FusedQKNormAttention,
-    FusedSwiGLUMLP,
-    PersistentTokenRoutedMLP,
-)
-
-# Check available optimizations
-info = get_optimization_info()
-print(info)
-# {
-#   "triton_available": True,
-#   "optimizations": {
-#     "fused_qk_attention": {"speedup": "15-20%"},
-#     "fused_mlp": {"speedup": "20-30%"},
-#     "persistent_cggr": {"speedup": "10-15%"},
-#     "int8_quantization": {"speedup": "40-50%"},
-#   }
-# }
-```
-
-## Roadmap
-
-| Feature | Description | Status |
-|---------|-------------|--------|
-| **Continuous Batching** | Dynamic request batching | ✅ Done |
-| **Speculative Decoding** | 2-3x faster inference | Planned |
-
-## Related Packages
-
-- **[mu-inference](https://pypi.org/project/mu-inference/)** - High-performance inference server
-- **[complexity-framework](https://pypi.org/project/complexity-framework/)** - Training framework
+- **[complexity-framework](https://github.com/Complexity-ML/complexity-framework)** — Full training framework
+- **Paper**: Under review at TMLR
 
 ## Citation
-
-If you use Complexity-Deep in your research, please cite:
 
 ```bibtex
 @software{peyriguere2026complexity,
   author       = {Peyriguere, Boris},
-  title        = {Complexity-Deep: Token-Routed MLP with Mu-Guided Dynamics for Efficient Transformer Architectures},
+  title        = {Complexity-Deep: Token-Routed MLP with Mu-Guided Attention},
   year         = 2026,
-  publisher    = {Zenodo},
-  doi          = {10.5281/zenodo.18293026},
-  url          = {https://doi.org/10.5281/zenodo.18293026}
+  url          = {https://github.com/Complexity-ML/complexity-deep}
 }
 ```
 
 ## License
 
 CC BY-NC 4.0 (Creative Commons Attribution-NonCommercial 4.0)
-
-- **Research & Education**: Free to use
-- **Commercial use**: Open an issue on GitHub for licensing

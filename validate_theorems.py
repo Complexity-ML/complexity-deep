@@ -1,15 +1,11 @@
 """
 Empirical Validation of COMPLEXITY-DEEP Theorems
 =================================================
-Generates two figures for reviewer defense:
+Generates a figure for reviewer defense:
 
 1. Gradient Cosine Similarity between Experts (Theorem 3 - Gradient Orthogonalization)
    Shows that expert gradients diverge during training, validating
    that the modulo routing induces expert specialization.
-
-2. PiD Gradient Norm Analysis (PiD Controller Stabilization)
-   Shows gradient norms with vs without PiD controller,
-   validating that PiD prevents gradient explosions.
 
 Usage:
     python validate_theorems.py --checkpoint ./checkpoints/final.pt
@@ -140,92 +136,6 @@ def analyze_gradient_cosine_similarity(model, input_ids, labels, config):
     return layer_cosine_sims, layer_avg_cosine, expert_pairs
 
 
-def analyze_pid_gradient_norms(model, input_ids, labels, config, device):
-    """
-    Compare gradient norms with vs without PiD controller.
-    Validates PiD's role as training stabilizer.
-    """
-    print("\n" + "=" * 60)
-    print("PID CONTROLLER: Gradient Norm Analysis")
-    print("=" * 60)
-
-    num_layers = config.num_hidden_layers
-
-    # --- Run 1: Full model (PiD active) ---
-    print("\n[1/2] Computing gradient norms WITH PiD...")
-    model.zero_grad()
-    model.train()
-    outputs = model(input_ids, labels=labels)
-    loss_with_pid = outputs.loss
-    loss_with_pid.backward()
-
-    norms_with_pid = []
-    for layer_idx in range(num_layers):
-        layer = model.model.layers[layer_idx]
-        layer_norm = 0.0
-        count = 0
-        for name, param in layer.named_parameters():
-            if param.grad is not None:
-                layer_norm += param.grad.float().norm().item() ** 2
-                count += 1
-        norms_with_pid.append(np.sqrt(layer_norm) if layer_norm > 0 else 0.0)
-
-    print(f"  Loss with PiD: {loss_with_pid.item():.4f}")
-    print(f"  Avg gradient norm: {np.mean(norms_with_pid):.4f}")
-
-    # --- Save PiD weights, then zero them out ---
-    print("\n[2/2] Computing gradient norms WITHOUT PiD...")
-    saved_pid_weights = {}
-    for layer_idx in range(num_layers):
-        dynamics = model.model.layers[layer_idx].dynamics
-        saved_pid_weights[layer_idx] = {
-            'controller_in_weight': dynamics.controller_in.weight.data.clone(),
-            'controller_in_bias': dynamics.controller_in.bias.data.clone(),
-            'controller_out_weight': dynamics.controller_out.weight.data.clone(),
-            'controller_out_bias': dynamics.controller_out.bias.data.clone(),
-        }
-        # Zero out controller (PiD becomes constant alpha/beta/gate from bias init)
-        dynamics.controller_in.weight.data.zero_()
-        dynamics.controller_out.weight.data.zero_()
-
-    model.zero_grad()
-    outputs = model(input_ids, labels=labels)
-    loss_without_pid = outputs.loss
-    loss_without_pid.backward()
-
-    norms_without_pid = []
-    for layer_idx in range(num_layers):
-        layer = model.model.layers[layer_idx]
-        layer_norm = 0.0
-        for name, param in layer.named_parameters():
-            if param.grad is not None:
-                layer_norm += param.grad.float().norm().item() ** 2
-        norms_without_pid.append(np.sqrt(layer_norm) if layer_norm > 0 else 0.0)
-
-    print(f"  Loss without PiD: {loss_without_pid.item():.4f}")
-    print(f"  Avg gradient norm: {np.mean(norms_without_pid):.4f}")
-
-    # --- Restore PiD weights ---
-    for layer_idx in range(num_layers):
-        dynamics = model.model.layers[layer_idx].dynamics
-        dynamics.controller_in.weight.data = saved_pid_weights[layer_idx]['controller_in_weight']
-        dynamics.controller_in.bias.data = saved_pid_weights[layer_idx]['controller_in_bias']
-        dynamics.controller_out.weight.data = saved_pid_weights[layer_idx]['controller_out_weight']
-        dynamics.controller_out.bias.data = saved_pid_weights[layer_idx]['controller_out_bias']
-
-    model.eval()
-
-    # Compute ratio
-    ratio = []
-    for w, wo in zip(norms_with_pid, norms_without_pid):
-        if wo > 0:
-            ratio.append(w / wo)
-        else:
-            ratio.append(1.0)
-
-    return norms_with_pid, norms_without_pid, ratio, loss_with_pid.item(), loss_without_pid.item()
-
-
 def plot_gradient_cosine_similarity(layer_cosine_sims, layer_avg_cosine, expert_pairs, num_layers, output_path):
     """Plot gradient cosine similarity between experts."""
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
@@ -269,53 +179,6 @@ def plot_gradient_cosine_similarity(layer_cosine_sims, layer_avg_cosine, expert_
     plt.close()
 
 
-def plot_pid_gradient_norms(norms_with, norms_without, ratio, loss_with, loss_without, num_layers, output_path):
-    """Plot gradient norms with vs without PiD."""
-    fig, axes = plt.subplots(1, 3, figsize=(16, 5))
-    x = range(num_layers)
-
-    # Left: absolute gradient norms
-    ax = axes[0]
-    ax.plot(x, norms_with, 'b-o', markersize=4, label=f'With PiD (loss={loss_with:.3f})')
-    ax.plot(x, norms_without, 'r-s', markersize=4, label=f'Without PiD (loss={loss_without:.3f})')
-    ax.set_xlabel('Layer')
-    ax.set_ylabel('Gradient Norm (L2)')
-    ax.set_title('(a) Gradient Norms per Layer')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-
-    # Middle: ratio
-    ax = axes[1]
-    colors = ['green' if r <= 1.0 else 'red' for r in ratio]
-    ax.bar(x, ratio, color=colors, alpha=0.7)
-    ax.axhline(y=1.0, color='black', linestyle='--', alpha=0.5, label='Equal')
-    ax.set_xlabel('Layer')
-    ax.set_ylabel('Ratio (with PiD / without PiD)')
-    ax.set_title('(b) PiD Gradient Norm Ratio')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-
-    # Right: variance across layers
-    ax = axes[2]
-    var_with = np.std(norms_with)
-    var_without = np.std(norms_without)
-    bars = ax.bar(['With PiD', 'Without PiD'], [var_with, var_without],
-                  color=['steelblue', 'indianred'], alpha=0.8)
-    for bar, val in zip(bars, [var_with, var_without]):
-        ax.text(bar.get_x() + bar.get_width() / 2., bar.get_height() + 0.01,
-                f'{val:.4f}', ha='center', va='bottom', fontweight='bold')
-    ax.set_ylabel('Std Dev of Gradient Norms')
-    ax.set_title('(c) Gradient Norm Variance\n(lower = more stable)')
-    ax.grid(True, alpha=0.3)
-
-    fig.suptitle('COMPLEXITY-DEEP: PiD Controller Gradient Stabilization',
-                 fontsize=13, fontweight='bold')
-    plt.tight_layout()
-    plt.savefig(output_path, dpi=150, bbox_inches='tight')
-    print(f"Figure saved: {output_path}")
-    plt.close()
-
-
 def main():
     parser = argparse.ArgumentParser(description="Validate COMPLEXITY-DEEP Theorems Empirically")
     parser.add_argument("--checkpoint", type=str, default="./checkpoints/final.pt")
@@ -355,7 +218,7 @@ def main():
     input_ids, labels = get_sample_batch(tokenizer, args.device, args.batch_size, args.seq_len)
     print(f"Input shape: {input_ids.shape}")
 
-    # === Analysis 1: Gradient Cosine Similarity ===
+    # === Analysis: Gradient Cosine Similarity ===
     layer_cosine_sims, layer_avg_cosine, expert_pairs = analyze_gradient_cosine_similarity(
         model, input_ids, labels, config
     )
@@ -363,16 +226,6 @@ def main():
         layer_cosine_sims, layer_avg_cosine, expert_pairs,
         config.num_hidden_layers,
         Path(args.output_dir) / "gradient_cosine_similarity.png"
-    )
-
-    # === Analysis 2: PiD Gradient Norms ===
-    norms_with, norms_without, ratio, loss_w, loss_wo = analyze_pid_gradient_norms(
-        model, input_ids, labels, config, args.device
-    )
-    plot_pid_gradient_norms(
-        norms_with, norms_without, ratio, loss_w, loss_wo,
-        config.num_hidden_layers,
-        Path(args.output_dir) / "pid_gradient_analysis.png"
     )
 
     # === Summary ===
@@ -388,18 +241,7 @@ def main():
     else:
         print("  -> Expert gradients are still correlated (limited orthogonalization)")
 
-    avg_ratio = np.mean(ratio)
-    std_with = np.std(norms_with)
-    std_without = np.std(norms_without)
-    print(f"\nPiD Analysis:")
-    print(f"  Gradient norm std WITH PiD:    {std_with:.4f}")
-    print(f"  Gradient norm std WITHOUT PiD: {std_without:.4f}")
-    if std_with < std_without:
-        print(f"  -> PiD reduces gradient variance by {(1 - std_with/std_without)*100:.1f}% (stabilizing)")
-    else:
-        print(f"  -> PiD increases gradient variance (dynamic regulation)")
-
-    print(f"\nFigures saved to: {args.output_dir}")
+    print(f"\nFigure saved to: {args.output_dir}")
 
 
 if __name__ == "__main__":
